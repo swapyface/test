@@ -1,0 +1,195 @@
+#visuallization 
+
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Load your dataset
+# Example: df = pd.read_csv('your_dataset.csv')
+# Replace 'your_dataset.csv' with the actual path to your dataset
+df = pd.read_csv('your_dataset.csv')
+
+# Define the dependent variable (Y) and independent variables (X)
+Y = df['dependent_variable']  # Replace 'dependent_variable' with your actual dependent variable name
+X = df.drop('dependent_variable', axis=1)  # Dropping the dependent variable to keep only the independent variables
+
+# Step 1: Correlation with the dependent variable
+correlations = X.corrwith(Y)
+print("Correlation with the dependent variable:")
+print(correlations)
+
+# Visualizing the correlation matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Matrix')
+plt.show()
+
+# Step 2: Checking for multicollinearity using VIF
+# Adding a constant column for VIF calculation
+X_with_constant = sm.add_constant(X)
+
+# Calculating VIF for each independent variable
+vif = pd.DataFrame()
+vif["Variable"] = X_with_constant.columns
+vif["VIF"] = [variance_inflation_factor(X_with_constant.values, i) for i in range(X_with_constant.shape[1])]
+print("\nVariance Inflation Factor (VIF):")
+print(vif)
+
+# Step 3: Fit a linear regression model
+# Splitting the data into training and testing sets
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3, random_state=42)
+
+# Fitting the model
+model = LinearRegression()
+model.fit(X_train, Y_train)
+
+# Step 4: Display the coefficients and model summary
+X_train_with_constant = sm.add_constant(X_train)
+ols_model = sm.OLS(Y_train, X_train_with_constant).fit()
+print("\nLinear Regression Model Summary:")
+print(ols_model.summary())
+
+
+###############################################################
+
+
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+# Sample dataset
+data = {
+    'Category': ['A', 'B', 'A', 'C', 'B', 'C', 'A'],
+    'NumericFeature1': [10, 15, 10, 20, 15, 20, 10],
+    'NumericFeature2': [1.5, 2.3, 1.7, 2.9, 2.2, 2.9, 1.6],
+    'Target': [100, 150, 120, 200, 160, 210, 110]
+}
+
+df = pd.DataFrame(data)
+
+# Features and target
+X = df[['Category', 'NumericFeature1', 'NumericFeature2']]
+y = df['Target']
+
+# OneHotEncoder for categorical features
+categorical_features = ['Category']
+numeric_features = ['NumericFeature1', 'NumericFeature2']
+
+# Preprocessing (OneHotEncoding for categorical variables)
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('cat', OneHotEncoder(), categorical_features)
+    ],
+    remainder='passthrough'  # Keeps the numeric features as they are
+)
+
+# Building a pipeline
+model_pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('regressor', LinearRegression())
+])
+
+# Splitting the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Training the model
+model_pipeline.fit(X_train, y_train)
+
+# Predicting
+y_pred = model_pipeline.predict(X_test)
+
+# Evaluating the model
+mse = mean_squared_error(y_test, y_pred)
+print(f'Mean Squared Error: {mse}')
+
+# Output the coefficients
+print("Model coefficients:", model_pipeline.named_steps['regressor'].coef_)
+print("Model intercept:", model_pipeline.named_steps['regressor'].intercept_)
+#######################################################################################
+
+
+date handling
+
+import pandas as pd
+from datetime import datetime
+
+# Assuming df is your DataFrame and 'maturity_date' is the column with maturity dates
+df['maturity_date'] = pd.to_datetime(df['maturity_date'])
+df['current_date'] = datetime.now()
+df['time_to_maturity_days'] = (df['maturity_date'] - df['current_date']).dt.days
+
+2nd mothod
+
+
+def categorize_maturity(row):
+    if row <= 365:
+        return 'Short-Term'
+    elif 365 < row <= 1825:
+        return 'Medium-Term'
+    else:
+        return 'Long-Term'
+
+df['maturity_category'] = df['time_to_maturity_days'].apply(categorize_maturity)
+df = pd.get_dummies(df, columns=['maturity_category'], drop_first=True)
+
+
+#################################################################################
+
+
+DB Scan
+
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.cluster import DBSCAN
+import numpy as np
+
+# Load your dataset
+# Replace 'your_dataset.csv' with the path to your dataset file
+df = pd.read_csv('your_dataset.csv')
+
+# Preprocessing
+# 1. Separate categorical and numerical columns
+categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+numerical_cols = df.select_dtypes(include=[np.number]).columns
+
+# 2. One-hot encode categorical variables
+encoder = OneHotEncoder(sparse=False, drop='first')
+encoded_categorical = encoder.fit_transform(df[categorical_cols])
+
+# 3. Combine the encoded categorical data with numerical data
+encoded_categorical_df = pd.DataFrame(encoded_categorical, columns=encoder.get_feature_names_out(categorical_cols))
+processed_df = pd.concat([df[numerical_cols].reset_index(drop=True), encoded_categorical_df.reset_index(drop=True)], axis=1)
+
+# 4. Standardize the data
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(processed_df)
+
+# DBSCAN model
+# Choose your DBSCAN parameters
+dbscan = DBSCAN(eps=0.5, min_samples=5)
+dbscan.fit(scaled_data)
+
+# Identifying anomalies
+# In DBSCAN, anomalies are labeled as -1
+df['Anomaly'] = dbscan.labels_
+
+# Review the results
+anomalies = df[df['Anomaly'] == -1]
+print(f"Number of anomalies detected: {len(anomalies)}")
+print(anomalies.head())
+
+# Optional: Save anomalies to a CSV file
+anomalies.to_csv('detected_anomalies.csv', index=False)
+
+
+
