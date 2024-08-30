@@ -212,5 +212,71 @@ print(anomalies.head())
 # Optional: Save anomalies to a CSV file
 anomalies.to_csv('detected_anomalies.csv', index=False)
 
+--------------------------------------------------------------------------
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+
+# Sample DataFrame (replace with your actual DataFrame)
+df = pd.DataFrame({
+    'column1': np.random.normal(0, 1, 1000),  # Example of normally distributed data
+    'column2': np.random.exponential(1, 1000)  # Example of non-normally distributed data
+})
+
+# Function to check normality for a specific column in the DataFrame
+def check_normality(df, column):
+    data = df[column]
+    
+    # 1. Visual Inspection using Histogram and Q-Q Plot
+    def plot_histogram_and_qq(data, column):
+        plt.figure(figsize=(12, 5))
+
+        plt.subplot(1, 2, 1)
+        plt.hist(data, bins=30, edgecolor='black')
+        plt.title(f'Histogram of {column}')
+
+        plt.subplot(1, 2, 2)
+        stats.probplot(data, dist="norm", plot=plt)
+        plt.title(f'Q-Q Plot of {column}')
+
+        plt.show()
+
+    # 2. Shapiro-Wilk Test for Normality
+    def shapiro_wilk_test(data):
+        stat, p_value = stats.shapiro(data)
+        print('Shapiro-Wilk Test:')
+        print(f'Statistic: {stat:.4f}, p-value: {p_value:.4f}')
+        if p_value > 0.05:
+            print(f"{column} is likely normally distributed (parametric).")
+        else:
+            print(f"{column} is likely not normally distributed (non-parametric).")
+        print()
+
+    # 3. Kolmogorov-Smirnov Test for Normality
+    def kolmogorov_smirnov_test(data):
+        d_stat, p_value = stats.kstest(data, 'norm', args=(np.mean(data), np.std(data)))
+        print('Kolmogorov-Smirnov Test:')
+        print(f'D-statistic: {d_stat:.4f}, p-value: {p_value:.4f}')
+        if p_value > 0.05:
+            print(f"{column} is likely normally distributed (parametric).")
+        else:
+            print(f"{column} is likely not normally distributed (non-parametric).")
+        print()
+
+    # Plot the Histogram and Q-Q plot
+    plot_histogram_and_qq(data, column)
+
+    # Perform Shapiro-Wilk Test
+    shapiro_wilk_test(data)
+
+    # Perform Kolmogorov-Smirnov Test
+    kolmogorov_smirnov_test(data)
+
+# Example: Check normality for a specific column in the DataFrame
+check_normality(df, 'column1')
+check_normality(df, 'column2')
 
 
