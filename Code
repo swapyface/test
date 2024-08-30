@@ -47,12 +47,33 @@ X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3, random_
 # Fitting the model
 model = LinearRegression()
 model.fit(X_train, Y_train)
-
 # Step 4: Display the coefficients and model summary
 X_train_with_constant = sm.add_constant(X_train)
 ols_model = sm.OLS(Y_train, X_train_with_constant).fit()
 print("\nLinear Regression Model Summary:")
 print(ols_model.summary())
+-------------------------------------------------------------------------
+correlations = df.corr()
+dependent_var_corr = correlations['dependent_variable'].drop('dependent_variable')
+print("Correlation of independent variables with the dependent variable:")
+print(dependent_var_corr)
+
+# Visualizing the correlation matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlations, annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Matrix')
+plt.show()
+
+# Step 2: Checking for multicollinearity using VIF
+# Adding a constant column for VIF calculation
+X_with_constant = sm.add_constant(X)
+
+# Calculating VIF for each independent variable
+vif = pd.DataFrame()
+vif["Variable"] = X_with_constant.columns
+vif["VIF"] = [variance_inflation_factor(X_with_constant.values, i) for i in range(X_with_constant.shape[1])]
+print("\nVariance Inflation Factor (VIF):")
+print(vif)
 
 
 ###############################################################
