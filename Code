@@ -29,6 +29,38 @@ sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt='.2f')
 plt.title('Correlation Matrix')
 plt.show()
 
+------------------------------------------------
+
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from scipy.stats import pointbiserialr, f_oneway
+
+# Load your dataset
+df = pd.read_csv('your_dataset.csv')
+
+# Identify the categorical and numerical variables
+categorical_vars = ['categorical_variable1', 'categorical_variable2']  # Replace with actual categorical variable names
+numerical_vars = ['numerical_variable']  # Replace with the actual numerical variable name
+
+# Step 1: Label Encoding for categorical variables (if necessary)
+le = LabelEncoder()
+for col in categorical_vars:
+    df[col + '_encoded'] = le.fit_transform(df[col])
+
+# Step 2: Point Biserial Correlation (for binary categorical variables)
+for col in categorical_vars:
+    if df[col].nunique() == 2:  # Check if the variable is binary
+        corr, p_value = pointbiserialr(df[col + '_encoded'], df[numerical_vars[0]])
+        print(f'Point Biserial Correlation between {col} and {numerical_vars[0]}: {corr:.2f}, p-value: {p_value:.2f}')
+
+# Step 3: ANOVA (for categorical variables with more than two levels)
+for col in categorical_vars:
+    if df[col].nunique() > 2:  # Check if the variable has more than two levels
+        groups = [df[numerical_vars[0]][df[col] == level] for level in df[col].unique()]
+        f_stat, p_value = f_oneway(*groups)
+        print(f'ANOVA between {col} and {numerical_vars[0]}: F-statistic: {f_stat:.2f}, p-value: {p_value:.2f}')
+
+
 # Step 2: Checking for multicollinearity using VIF
 # Adding a constant column for VIF calculation
 X_with_constant = sm.add_constant(X)
