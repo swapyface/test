@@ -310,3 +310,38 @@ check_normality(df, 'column1')
 check_normality(df, 'column2')
 
 
+_________________________________________________________________
+
+outliear dectection 
+
+result = df.groupby('Category')['Dependent_Variable'].agg(['min', 'max']).reset_index()
+
+
+import pandas as pd
+
+# Sample data
+data = {
+    'r': ['A', 'B', 'A', 'B', 'C', 'A', 'C', 'B', 'C', 'A'],
+    'Dependent_Variable': [5.2, 10.5, 15.8, 7.3, 12.1, 3.6, 8.9, 6.7, 14.5, 20.2]
+}
+
+# Create DataFrame
+df = pd.DataFrame(data)
+
+# Function to detect outliers using the IQR method
+def find_outliers(group):
+    Q1 = group.quantile(0.25)
+    Q3 = group.quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return group[(group < lower_bound) | (group > upper_bound)]
+
+# Apply the function to each category in the 'Rating' column
+outliers = df.groupby('Rating')['Dependent_Variable'].apply(find_outliers).reset_index()
+
+# Display the outliers
+print(outliers)
+
+
+
