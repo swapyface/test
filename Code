@@ -392,4 +392,27 @@ print(df_with_extra)
 
 
 # Step 6: Join the extra columns back to the DataFrame
-df_with_extra = pd.concat([df[categorical_cols + numerical_cols + ['cluster', 'is_anomaly']], extra_columns], axis=1)
+df_with_extra = pd.concat([df[categorical_cols + numerical_cols + ['cluster', 'is_anomaly']], extra_columns], axis=import pandas as pd
+import numpy as np
+
+# Sample dataframe with additional columns
+data = {'Category': ['A', 'A', 'A', 'B', 'B', 'B', 'C', 'C', 'C'],
+        'NumericColumn': [10, 15, 30, 25, 40, 45, 100, 110, 150],
+        'OtherColumn1': ['X', 'Y', 'Z', 'X', 'Y', 'Z', 'X', 'Y', 'Z'],
+        'OtherColumn2': [1, 2, 3, 4, 5, 6, 7, 8, 9]}
+
+df = pd.DataFrame(data)
+
+# Function to filter rows that are outside 2 standard deviations for each group
+def find_outliers(group):
+    mean = group['NumericColumn'].mean()
+    std_dev = group['NumericColumn'].std()
+    lower_bound = mean - 2 * std_dev
+    upper_bound = mean + 2 * std_dev
+    # Return all columns while filtering based on NumericColumn
+    return group[(group['NumericColumn'] < lower_bound) | (group['NumericColumn'] > upper_bound)]
+
+# Apply the function to each group
+outliers = df.groupby('Category').apply(find_outliers).reset_index(drop=True)
+
+print(outliers)
