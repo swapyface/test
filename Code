@@ -342,6 +342,51 @@ outliers = df.groupby('Rating')['Dependent_Variable'].apply(find_outliers).reset
 
 # Display the outliers
 print(outliers)
+------
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.cluster import DBSCAN
+import numpy as np
 
+# Sample data with categorical, numerical, and extra columns
+data = {
+    'category': ['A', 'B', 'A', 'C', 'B', 'A', 'C', 'B'],
+    'numerical': [10, 15, 14, 10, 23, 20, 30, 25],
+    'extra_column1': ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'],
+    'extra_column2': [100, 200, 150, 120, 300, 250, 280, 240]
+}
 
+# Create DataFrame
+df = pd.DataFrame(data)
+
+# Step 1: Keep the columns you don't want to pass to DBSCAN
+extra_columns = df[['extra_column1', 'extra_column2']]
+
+# Step 2: Preprocess data (excluding the extra columns)
+# One-Hot Encoding for the categorical variable
+encoder = OneHotEncoder(sparse=False)
+encoded_cat = encoder.fit_transform(df[['category']])
+
+# Standardize the numerical column
+scaler = StandardScaler()
+scaled_num = scaler.fit_transform(df[['numerical']])
+
+# Combine encoded categorical and scaled numerical data
+X = np.hstack((encoded_cat, scaled_num))
+
+# Step 3: Apply DBSCAN (without passing the extra columns)
+dbscan = DBSCAN(eps=1.5, min_samples=2)
+labels = dbscan.fit_predict(X)
+
+# Step 4: Add the cluster labels back to the original DataFrame
+df['cluster'] = labels
+
+# Step 5: Identify anomalies (outliers have a cluster label of -1)
+df['is_anomaly'] = df['cluster'] == -1
+
+# Step 6: Join the extra columns back to the DataFrame
+df_with_extra = pd.concat([df[['category', 'numerical', 'cluster', 'is_anomaly']], extra_columns], axis=1)
+
+# Output the final DataFrame with anomalies detected
+print(df_with_extra)
 
