@@ -390,3 +390,6 @@ df_with_extra = pd.concat([df[['category', 'numerical', 'cluster', 'is_anomaly']
 # Output the final DataFrame with anomalies detected
 print(df_with_extra)
 
+
+# Step 6: Join the extra columns back to the DataFrame
+df_with_extra = pd.concat([df[categorical_cols + numerical_cols + ['cluster', 'is_anomaly']], extra_columns], axis=1)
