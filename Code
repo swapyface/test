@@ -416,3 +416,21 @@ def find_outliers(group):
 outliers = df.groupby('Category').apply(find_outliers).reset_index(drop=True)
 
 print(outliers)
+
+ Function to retain rows that are within 2 standard deviations for each group
+def drop_outliers(group):
+    mean = group['NumericColumn'].mean()
+    std_dev = group['NumericColumn'].std()
+    lower_bound = mean - 2 * std_dev
+    upper_bound = mean + 2 * std_dev
+    # Retain only rows that are within the 2 standard deviations
+    return group[(group['NumericColumn'] >= lower_bound) & (group['NumericColumn'] <= upper_bound)]
+
+# Apply the function to each group to drop outliers
+cleaned_df = df.groupby('Category').apply(drop_outliers).reset_index(drop=True)
+
+print(cleaned_df)
+
+
+
+
