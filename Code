@@ -431,6 +431,9 @@ cleaned_df = df.groupby('Category').apply(drop_outliers).reset_index(drop=True)
 
 print(cleaned_df)
 
+Thank you, Sid, for the heads-up. I understand Adithya's importance on the call. However, I'd like to proceed with our scheduled meeting and go over the key points quickly. This will allow me to do further analysis. 
 
+We can also arrange for a follow-up meeting next week, when Adi is available.
+Let me know if this works for you. 
 
 
