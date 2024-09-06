@@ -1,1 +1,33 @@
+from sklearn.metrics import davies_bouldin_score
+
+# Filter out the noise points
+db_score = davies_bouldin_score(non_noise_data, non_noise_labels)
+print(f'Davies-Bouldin Index: {db_score}')
+
+from sklearn.metrics import adjusted_rand_score
+
+# Assume true_labels are known
+true_labels = [...]  # Ground truth labels for the data
+
+# Calculate ARI (higher is better)
+ari_score = adjusted_rand_score(true_labels, df['cluster'])
+print(f'Adjusted Rand Index: {ari_score}')
+
+# Count the number of points in each cluster
+cluster_counts = df['cluster'].value_counts()
+print(cluster_counts)
+
+
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+
+# Use PCA to reduce to 2D for visualization if the data is high-dimensional
+pca = PCA(n_components=2)
+reduced_data = pca.fit_transform(X)
+
+plt.scatter(reduced_data[:, 0], reduced_data[:, 1], c=df['cluster'], cmap='viridis', marker='o', s=50)
+plt.title('DBSCAN Clustering Visualization')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.show()
 
