@@ -1,5 +1,4 @@
- 
-import pandas as pd
+ import pandas as pd
 
 # Assuming your DataFrame is named 'df' and the columns are 'rating' (categorical) and 'dependent_variable'
 
@@ -17,6 +16,7 @@ df_filtered = df[(df['dependent_variable'] >= Lower_Bound) & (df['dependent_vari
 
 # Display the filtered DataFrame with all categories preserved
 print(df_filtered)
+
 import pandas as pd
 import numpy as np
 import tensorflow as tf
