@@ -1,4 +1,5 @@
  import pandas as pd
+df_filtered = df[(df['dependent_variable'] >= Q1) & (df['dependent_variable'] <= Q3)]
 
 # Assuming your DataFrame is named 'df' and the columns are 'rating' (categorical) and 'dependent_variable'
 
