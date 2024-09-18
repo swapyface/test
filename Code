@@ -1,3 +1,31 @@
+ 
+import pandas as pd
+
+# Assuming your DataFrame is named 'df' and the columns are 'rating' (categorical) and 'dependent_variable'
+
+# Calculate Q1, Q3, and IQR for each category
+Q1 = df.groupby('rating')['dependent_variable'].quantile(0.25)
+Q3 = df.groupby('rating')['dependent_variable'].quantile(0.75)
+IQR = Q3 - Q1
+
+# Merge Q1, Q3, and IQR with the original DataFrame
+df = df.merge(Q1.rename('Q1'), on='rating')
+df = df.merge(Q3.rename('Q3'), on='rating')
+df = df.merge(IQR.rename('IQR'), on='rating')
+
+# Calculate the lower and upper bounds for each row
+df['Lower Bound'] = df['Q1'] - 1.5 * df['IQR']
+df['Upper Bound'] = df['Q3'] + 1.5 * df['IQR']
+
+# Filter the DataFrame to keep only values within the IQR bounds
+df_filtered = df[(df['dependent_variable'] >= df['Lower Bound']) & (df['dependent_variable'] <= df['Upper Bound'])]
+
+# Drop the additional columns (Q1, Q3, IQR, bounds) if needed
+df_filtered = df_filtered.drop(columns=['Q1', 'Q3', 'IQR', 'Lower Bound', 'Upper Bound'])
+
+# Display the filtered DataFrame
+print(df_filtered)
+
 import pandas as pd
 import numpy as np
 import tensorflow as tf
