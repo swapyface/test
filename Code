@@ -1,37 +1,6 @@
-
-
-import pandas as pd
-
-# Assuming you have loaded your dataset into a DataFrame called df
-# df = pd.read_csv("your_dataset.csv")
-
-# Define the categories you want to drop
-categories_to_drop = ['category1', 'category2']
-
-# Filter out the rows where 'rating' is in the categories you want to drop
-df_filtered = df[~df['rating'].isin(categories_to_drop)]
-
-# Define the target number of records per category
-target_records = 20000
-
-# Initialize an empty DataFrame to store the sampled records
-sampled_df = pd.DataFrame()
-
-# Iterate through each category in the filtered 'rating' column
-for category in df_filtered['rating'].unique():
-    # Get all records of the current category
-    category_df = df_filtered[df_filtered['rating'] == category]
+    min_value = np.min(original_category_data)
+    max_value = np.max(original_category_data)
     
-    # If the category has fewer records than the target, take all the records; otherwise, sample 20,000
-    if len(category_df) >= target_records:
-        sampled_category = category_df.sample(n=target_records, random_state=42)
-    else:
-        sampled_category = category_df
-    
-    # Append the sampled records to the final DataFrame
-    sampled_df = pd.concat([sampled_df, sampled_category])
-
-# Save the sampled data to a CSV file
-sampled_df.to_csv('test.csv', index=False)
-
-print(f"Sampled data saved to test.csv with {len(sampled_df)} records, excluding {categories_to_drop}.")
+    # Calculate lower and upper bounds based on 20% down from min and 20% up from max
+    lower_bound = min_value - 0.2 * min_value
+    upper_bound = max_value + 0.2 * max_value
