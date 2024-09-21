@@ -54,14 +54,6 @@ for category in categories:
     # Get the original values (before scaling) for bounds calculation
     original_category_data = df[df['category'] == category]['numerical_column'].values
     
-    # Calculate min and max for the current category
-    min_value = np.min(original_category_data)
-    max_value = np.max(original_category_data)
-    
-    # Calculate lower and upper bounds based on 20% down from min and 20% up from max
-    lower_bound = min_value - 0.2 * min_value
-    upper_bound = max_value + 0.2 * max_value
-    
     # Train/test split
     X_train, X_test = train_test_split(category_data, test_size=0.2, random_state=42)
     
@@ -78,12 +70,16 @@ for category in categories:
     original_values = scaler.inverse_transform(category_data)
     reconstructed_values = scaler.inverse_transform(reconstruction)
     
-    # Check if the reconstructed values fall within the lower and upper bounds for good/bad predictions
+    # Check if the difference between original and reconstructed value is greater than 20%
     for original, reconstructed in zip(original_values, reconstructed_values):
-        if lower_bound <= reconstructed[0] <= upper_bound:
-            status = 'Good Prediction'
-        else:
+        # Calculate the percentage difference
+        difference_percentage = abs(original[0] - reconstructed[0]) / original[0]
+        
+        # Check if the difference exceeds 20%
+        if difference_percentage > 0.2:
             status = 'Bad Prediction'
+        else:
+            status = 'Good Prediction'
         
         # Append to the results DataFrame
         results = results.append({
