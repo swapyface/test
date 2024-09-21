@@ -1,12 +1,89 @@
-for original, reconstructed in zip(original_values, reconstructed_values):
-        # Calculate the percentage difference
-        difference_percentage = abs(original[0] - reconstructed[0]) / original[0]
-        
-        # Check if the difference exceeds 20%
-        if difference_percentage > 0.2:
-            status = 'Bad Prediction'
-        else:
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras import Input
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import openpyxl
+
+# Assuming your clean dataset is a Pandas DataFrame with 'category' and 'numerical_column'
+df = pd.DataFrame({
+    'category': np.random.choice(['A', 'B', 'C'], size=1000000),
+    'numerical_column': np.random.normal(loc=100, scale=15, size=1000000)
+})
+
+# Step 1: Prepare the data
+# Label encode the categorical column
+le = LabelEncoder()
+df['category_encoded'] = le.fit_transform(df['category'])
+
+# Standardize the numerical column
+scaler = StandardScaler()
+df['scaled_numerical'] = scaler.fit_transform(df[['numerical_column']])
+
+# Step 2: Define the autoencoder model
+def build_autoencoder():
+    model = Sequential([
+        Input(shape=(1,)),
+        Dense(16, activation='relu'),
+        Dense(8, activation='relu'),
+        Dense(16, activation='relu'),
+        Dense(1, activation='linear')  # Output layer to reconstruct the input
+    ])
+    
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
+    
+    return model
+
+# DataFrame to store the results
+results = pd.DataFrame(columns=['category', 'original', 'reconstructed', 'status'])
+
+# Step 3: Train the model for each category separately
+categories = df['category'].unique()
+
+for category in categories:
+    print(f"Training autoencoder for category: {category}")
+    
+    # Select the data for the current category
+    category_data = df[df['category'] == category]['scaled_numerical'].values
+    category_data = category_data.reshape(-1, 1)  # Reshape for the model
+    
+    # Get the original values (before scaling) for bounds calculation
+    original_category_data = df[df['category'] == category]['numerical_column'].values
+    
+    # Calculate min and max for the current category
+    min_value = np.min(original_category_data)
+    max_value = np.max(original_category_data)
+    
+    # Calculate lower and upper bounds based on 20% down from min and 20% up from max
+    lower_bound = min_value - 0.2 * min_value
+    upper_bound = max_value + 0.2 * max_value
+    
+    # Train/test split
+    X_train, X_test = train_test_split(category_data, test_size=0.2, random_state=42)
+    
+    # Build the autoencoder model
+    model = build_autoencoder()
+    
+    # Train the model
+    model.fit(X_train, X_train, epochs=50, batch_size=1024, validation_data=(X_test, X_test), verbose=1)
+    
+    # Reconstruct the entire category data
+    reconstruction = model.predict(category_data)
+    
+    # Inverse transform to get original values
+    original_values = scaler.inverse_transform(category_data)
+    reconstructed_values = scaler.inverse_transform(reconstruction)
+    
+    # Check if the reconstructed values fall within the lower and upper bounds for good/bad predictions
+    for original, reconstructed in zip(original_values, reconstructed_values):
+        if lower_bound <= reconstructed[0] <= upper_bound:
             status = 'Good Prediction'
+        else:
+            status = 'Bad Prediction'
         
         # Append to the results DataFrame
         results = results.append({
@@ -15,3 +92,8 @@ for original, reconstructed in zip(original_values, reconstructed_values):
             'reconstructed': reconstructed[0],
             'status': status
         }, ignore_index=True)
+
+# Step 4: Save the results to an Excel file
+results.to_excel("good_bad_predictions.xlsx", index=False)
+
+print("Results saved to 'good_bad_predictions.xlsx'")
