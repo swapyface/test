@@ -1,30 +1,30 @@
 # Import libraries
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from sklearn.neighbors import LocalOutlierFactor
 
-# Sample data
+# Sample data (replace with your actual dataset)
 data = pd.DataFrame({
-    'numerical_variable': [10, 12, 11, 14, 15, 13, 100, 14, 12, 13, 11, 10, 12] # example data with an outlier
+    'Category': ['A', 'A', 'A', 'B', 'B', 'B', 'C', 'C', 'C'],
+    'Numerical_Variable': [10, 12, 11, 50, 49, 52, 100, 101, 99],  # Numerical data
+    'Other_Column': ['X', 'Y', 'Z', 'X', 'Y', 'Z', 'X', 'Y', 'Z']   # Other columns
 })
 
-# Reshape the data to 2D array as required by LOF
-X = data['numerical_variable'].values.reshape(-1, 1)
+# Function to detect outliers in each category
+def detect_outliers_in_category(group):
+    X = group['Numerical_Variable'].values.reshape(-1, 1)
+    lof = LocalOutlierFactor(n_neighbors=2)  # Adjust n_neighbors based on your data size
+    group['Outlier'] = lof.fit_predict(X)  # -1 for outliers, 1 for inliers
+    return group
 
-# Apply Local Outlier Factor
-lof = LocalOutlierFactor(n_neighbors=20)  # You can adjust the number of neighbors
-outliers = lof.fit_predict(X)
+# Apply the LOF to each category
+result = data.groupby('Category').apply(detect_outliers_in_category)
 
-# Mark outliers
-data['outlier'] = outliers  # -1 indicates outlier, 1 indicates inlier
+# Optional: Keep only the outliers and merge with other columns
+result_with_outliers = data.merge(result[['Numerical_Variable', 'Outlier']], 
+                                  on='Numerical_Variable', how='left')
 
-# Display the results
-print(data)
+# Display the final result
+print(result_with_outliers)
 
-# Optional: Visualize the results
-plt.scatter(data.index, data['numerical_variable'], c=data['outlier'], cmap='coolwarm')
-plt.xlabel('Index')
-plt.ylabel('Numerical Variable')
-plt.title('Outlier Detection using LOF')
-plt.show()
+# Save to CSV
+result_with_outliers.to_csv('outlier_detection_by_category.csv', index=False)
