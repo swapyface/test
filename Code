@@ -1,77 +1,30 @@
-import pandas as pd
+# Import libraries
 import numpy as np
-from tensorflow.keras.models import load_model
-from sklearn.preprocessing import StandardScaler
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.neighbors import LocalOutlierFactor
 
-# Step 1: Load new data (replace with your actual data)
-new_data = pd.DataFrame({
-    'category': np.random.choice(['A', 'B', 'C'], size=1000),
-    'numerical_column': np.random.normal(loc=100, scale=15, size=1000)
+# Sample data
+data = pd.DataFrame({
+    'numerical_variable': [10, 12, 11, 14, 15, 13, 100, 14, 12, 13, 11, 10, 12] # example data with an outlier
 })
 
-# Step 2: Preprocess the new data
-# Standardize the numerical column (same preprocessing done during training)
-scaler = StandardScaler()
-new_data['scaled_numerical'] = scaler.fit_transform(new_data[['numerical_column']])
+# Reshape the data to 2D array as required by LOF
+X = data['numerical_variable'].values.reshape(-1, 1)
 
-# Step 3: Predict using the saved model for each category
-results = pd.DataFrame(columns=['category', 'original', 'reconstructed', 'status'])
+# Apply Local Outlier Factor
+lof = LocalOutlierFactor(n_neighbors=20)  # You can adjust the number of neighbors
+outliers = lof.fit_predict(X)
 
-# Define a dictionary to map categories to their corresponding models
-category_model_paths = {
-    'A': 'category_A_model.h5',  # Replace with the actual model file paths for each category
-    'B': 'category_B_model.h5',
-    'C': 'category_C_model.h5'
-}
+# Mark outliers
+data['outlier'] = outliers  # -1 indicates outlier, 1 indicates inlier
 
-# Get unique categories
-categories = new_data['category'].unique()
+# Display the results
+print(data)
 
-for category in categories:
-    # Load the model specific to the current category
-    model_path = category_model_paths.get(category)
-    if model_path is None:
-        print(f"No model found for category: {category}")
-        continue
-    
-    print(f"Making predictions for category: {category}")
-    
-    # Load the saved model for the current category
-    model = load_model(model_path)
-    
-    # Select the numerical data for the current category
-    category_data = new_data[new_data['category'] == category]['scaled_numerical'].values
-    category_data = category_data.reshape(-1, 1)  # Reshape for the model
-    
-    # Get the original (unscaled) numerical values for comparison
-    original_values = new_data[new_data['category'] == category]['numerical_column'].values
-    
-    # Make predictions using the loaded model for the current category
-    reconstructed_data = model.predict(category_data)
-    
-    # Inverse transform to get the original scale of reconstructed values
-    reconstructed_values = scaler.inverse_transform(reconstructed_data)
-    
-    # Calculate the difference and percentage difference between original and reconstructed values
-    for original, reconstructed in zip(original_values, reconstructed_values):
-        diff = abs(original - reconstructed[0])
-        percentage_diff = (diff / original) * 100
-        
-        # Check if the difference is within the 20% threshold
-        if percentage_diff <= 20:
-            status = 'Good Prediction'
-        else:
-            status = 'Bad Prediction'
-        
-        # Append the results to the DataFrame
-        results = results.append({
-            'category': category,
-            'original': original,
-            'reconstructed': reconstructed[0],
-            'status': status
-        }, ignore_index=True)
-
-# Step 4: Save the results to an Excel file
-results.to_excel("category_specific_predictions.xlsx", index=False)
-
-print("Predictions saved to 'category_specific_predictions.xlsx'")
+# Optional: Visualize the results
+plt.scatter(data.index, data['numerical_variable'], c=data['outlier'], cmap='coolwarm')
+plt.xlabel('Index')
+plt.ylabel('Numerical Variable')
+plt.title('Outlier Detection using LOF')
+plt.show()
