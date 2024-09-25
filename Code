@@ -1,43 +1,5 @@
-# Import necessary libraries
+import pandas as pd
 import numpy as np
-import pandas as pd
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import make_scorer, accuracy_score, f1_score
-
-# Sample data (replace with your dataset)
-data = pd.DataFrame({
-    'Category': ['A', 'A', 'A', 'B', 'B', 'B', 'C', 'C', 'C'],
-    'Numerical_Variable': [10, 12, 11, 50, 49, 52, 100, 101, 99],  # Numerical data
-    'Other_Column': ['X', 'Y', 'Z', 'X', 'Y', 'Z', 'X', 'Y', 'Z']   # Other columns
-})
-
-# Extract numerical data for the model
-X = data[['Numerical_Variable']]
-
-# Define the parameter grid for k (n_neighbors)
-param_grid = {'n_neighbors': np.arange(1, 30)}
-
-# Create the Local Outlier Factor model
-lof = LocalOutlierFactor()
-
-# Setup GridSearchCV to find the best 'k'
-grid_search = GridSearchCV(estimator=lof, param_grid=param_grid, 
-                           scoring=make_scorer(f1_score, average='macro', zero_division=1),
-                           cv=5, n_jobs=-1)
-
-# Perform the grid search
-grid_search.fit(X)
-
-# Find the best k value
-best_k = grid_search.best_params_['n_neighbors']
-
-# Output the best k value
-print(f"The best k value is: {best_k}")
-
-
-
-import pandas as pd
 
 # Sample data
 data = pd.DataFrame({
@@ -48,16 +10,32 @@ data = pd.DataFrame({
 # Rolling window size
 window = 3
 
-# Calculate rolling mean, Q1 (25th percentile), and Q3 (75th percentile)
-data['rolling_mean'] = data['target'].rolling(window=window).mean()
+# Step 1: Initial calculation of rolling Q1 and Q3
 data['rolling_q1'] = data['target'].rolling(window=window).quantile(0.25)
 data['rolling_q3'] = data['target'].rolling(window=window).quantile(0.75)
 
-# IQR (Interquartile Range)
+# Step 2: Calculate IQR and flag outliers
 data['IQR'] = data['rolling_q3'] - data['rolling_q1']
-
-# Outlier flagging: If the value is outside the IQR range
 data['outlier'] = ((data['target'] < data['rolling_q1']) | (data['target'] > data['rolling_q3']))
+
+# Step 3: Recalculate the rolling mean excluding outliers
+def rolling_mean_exclude_outliers(series, window):
+    rolling_mean = []
+    for i in range(len(series)):
+        # Select the window data
+        if i < window - 1:
+            rolling_mean.append(np.nan)
+        else:
+            # Get window values excluding outliers
+            window_data = series[i-window+1:i+1]
+            non_outliers = window_data[~data['outlier'].iloc[i-window+1:i+1]]
+            if len(non_outliers) > 0:
+                rolling_mean.append(non_outliers.mean())
+            else:
+                rolling_mean.append(np.nan)
+    return pd.Series(rolling_mean)
+
+data['rolling_mean_no_outliers'] = rolling_mean_exclude_outliers(data['target'], window)
 
 # Display the results
 print(data)
