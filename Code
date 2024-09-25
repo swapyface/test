@@ -20,15 +20,15 @@ def detect_outliers_mad(group, threshold=3.0):
     # Calculate the modified Z-score (to detect outliers)
     modified_z_score = 0.6745 * (group['Numerical_Variable'] - median) / mad
     
-    # Flag outliers based on the threshold
-    group['Outlier'] = np.abs(modified_z_score) > threshold
+    # Flag outliers based on the threshold (use Yes/No instead of True/False)
+    group['Outlier'] = np.where(np.abs(modified_z_score) > threshold, 'Yes', 'No')
     return group
 
-# Apply the MAD-based outlier detection to each category
+# Apply the MAD-based outlier detection to each category and retain all columns
 result = data.groupby('Category').apply(detect_outliers_mad).reset_index(drop=True)
 
-# Display the final result
+# Display the final result with Yes/No labels
 print(result)
 
-# Save to CSV
-result.to_csv('outlier_detection_by_category_mad.csv', index=False)
+# Save to CSV with Yes/No labels
+result.to_csv('outlier_detection_by_category_mad_yes_no.csv', index=False)
