@@ -34,3 +34,30 @@ best_k = grid_search.best_params_['n_neighbors']
 
 # Output the best k value
 print(f"The best k value is: {best_k}")
+
+
+
+import pandas as pd
+
+# Sample data
+data = pd.DataFrame({
+    'category': ['A', 'B', 'A', 'C', 'B', 'A', 'B', 'C', 'A'],
+    'target': [10, 15, 20, 25, 30, 35, 40, 45, 50]
+})
+
+# Rolling window size
+window = 3
+
+# Calculate rolling mean, Q1 (25th percentile), and Q3 (75th percentile)
+data['rolling_mean'] = data['target'].rolling(window=window).mean()
+data['rolling_q1'] = data['target'].rolling(window=window).quantile(0.25)
+data['rolling_q3'] = data['target'].rolling(window=window).quantile(0.75)
+
+# IQR (Interquartile Range)
+data['IQR'] = data['rolling_q3'] - data['rolling_q1']
+
+# Outlier flagging: If the value is outside the IQR range
+data['outlier'] = ((data['target'] < data['rolling_q1']) | (data['target'] > data['rolling_q3']))
+
+# Display the results
+print(data)
