@@ -1,44 +1,16 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
-from scipy import stats
 
-# Load the dataset
-data = pd.read_csv('your_dataset.csv')
-
-# One-hot encode categorical variables using pd.get_dummies()
-categorical_cols = data.select_dtypes(include=['object']).columns
-data_encoded = pd.get_dummies(data, columns=categorical_cols, drop_first=True)
-
-# Split the data into train and test sets
-X = data_encoded.drop('target_column', axis=1)  # Replace with your dependent variable column name
-y = data_encoded['target_column']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Build the model (Random Forest Regressor)
-model = RandomForestRegressor()
-model.fit(X_train, y_train)
-
-# Predictions
-y_pred = model.predict(X_test)
-
-# Calculate the IQR
-Q1 = stats.scoreatpercentile(y_test, 25)
-Q3 = stats.scoreatpercentile(y_test, 75)
-IQR = Q3 - Q1
-
-# Check if the prediction is within the IQR
-def check_prediction_within_iqr(y_true, y_pred, Q1, Q3):
+# Check if the prediction is within 20% of the actual value
+def check_within_20_percent(actual, predicted):
     result = []
-    for pred in y_pred:
-        if Q1 <= pred <= Q3:
+    for act, pred in zip(actual, predicted):
+        if abs(act - pred) / act <= 0.20:  # Check if the difference is within 20% of actual value
             result.append("Good Value")
         else:
             result.append("Bad Value")
     return result
 
-results = check_prediction_within_iqr(y_test, y_pred, Q1, Q3)
+# Apply the function
+results = check_within_20_percent(y_test, y_pred)
 
 # Output the result
 output = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred, 'Result': results})
