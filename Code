@@ -1,49 +1,13 @@
-import numpy as np
-import pandas as pd
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
+plt.figure(figsize=(10, 6))
 
-# Step 1: Generate a sample dataset with 200K rows and 100 columns
-np.random.seed(42)
-rows = 200000
-cols = 100
-# Simulate data with random numbers
-data = np.random.rand(rows, cols)
+# Plot non-outliers in blue (cluster != -1)
+sns.scatterplot(data=df[df['cluster'] != -1], x='days', y='var1', hue='cluster', palette='Blues', legend=False)
 
-# Step 2: Convert the data to a pandas DataFrame
-df = pd.DataFrame(data, columns=[f'feature_{i}' for i in range(cols)])
+# Plot outliers in red (cluster == -1)
+sns.scatterplot(data=df[df['cluster'] == -1], x='days', y='var1', color='red', label='Outliers', s=100, marker='x')
 
-# Step 3: Scale the dataset using StandardScaler (important for DBSCAN)
-scaler = StandardScaler()
-df_scaled = scaler.fit_transform(df)
-
-# Step 4: Set DBSCAN parameters
-# Adjust these values based on your dataset characteristics
-eps = 2.5   # Maximum distance between two samples for them to be considered in the same neighborhood
-min_samples = 5   # Minimum number of samples in a neighborhood to form a cluster
-
-# Step 5: Apply DBSCAN
-dbscan = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=-1)  # n_jobs=-1 for parallel processing
-dbscan.fit(df_scaled)
-
-# Step 6: Get the cluster labels
-labels = dbscan.labels_
-
-# Step 7: Evaluate the clustering result (Optional)
-# Silhouette score gives a good indication of cluster quality (-1 to 1, higher is better)
-# It can be computed only if more than one cluster is found
-if len(set(labels)) > 1:
-    score = silhouette_score(df_scaled, labels)
-    print(f'Silhouette Score: {score}')
-else:
-    print("Only one cluster found. Silhouette Score can't be computed.")
-
-# Step 8: Add the labels to the DataFrame
-df['cluster'] = labels
-
-# Step 9: Show the first few rows of the DataFrame with cluster labels
-print(df.head())
-
-# Save the result to a CSV if needed
-df.to_csv('dbscan_clustered_data.csv', index=False)
+plt.title('DBSCAN Clustering with Outliers Highlighted')
+plt.xlabel('Days')
+plt.ylabel('Variable 1')
+plt.legend(['Clusters', 'Outliers'], loc='best')
+plt.show()
