@@ -1,13 +1,32 @@
+import pandas as pd
+import numpy as np
+from sklearn.cluster import DBSCAN
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Example dataset with just numerical variable 'price'
+data = pd.DataFrame({
+    'price': [100, 105, 110, 500, 510, 505, 1000, 1005, 1010]
+})
+
+# Apply DBSCAN
+dbscan = DBSCAN(eps=10, min_samples=2)
+data['label'] = dbscan.fit_predict(data[['price']])
+
+# Create a box plot
 plt.figure(figsize=(10, 6))
+sns.boxplot(y=data['price'], showfliers=False)
 
-# Plot non-outliers in blue (cluster != -1)
-sns.scatterplot(data=df[df['cluster'] != -1], x='days', y='var1', hue='cluster', palette='Blues', legend=False)
+# Plot outliers in red and non-outliers in blue
+outliers = data[data['label'] == -1]
+non_outliers = data[data['label'] != -1]
 
-# Plot outliers in red (cluster == -1)
-sns.scatterplot(data=df[df['cluster'] == -1], x='days', y='var1', color='red', label='Outliers', s=100, marker='x')
+# Plot individual points
+plt.scatter(np.full(non_outliers.shape[0], 0), non_outliers['price'], color='blue', label='Non-Outlier', edgecolor='black')
+plt.scatter(np.full(outliers.shape[0], 0), outliers['price'], color='red', label='Outlier', edgecolor='black')
 
-plt.title('DBSCAN Clustering with Outliers Highlighted')
-plt.xlabel('Days')
-plt.ylabel('Variable 1')
-plt.legend(['Clusters', 'Outliers'], loc='best')
+# Customize plot
+plt.legend(loc='upper right')
+plt.title('DBSCAN Outlier Detection')
+plt.ylabel('Price')
 plt.show()
