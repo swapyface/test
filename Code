@@ -13,6 +13,9 @@ data = pd.DataFrame({
 dbscan = DBSCAN(eps=10, min_samples=2)
 data['label'] = dbscan.fit_predict(data[['price']])
 
+# Convert labels: 1 for non-outliers, 0 for outliers (-1 in DBSCAN)
+data['outlier'] = np.where(data['label'] == -1, 0, 1)
+
 # Save result to CSV
 data.to_csv('dbscan_outliers.csv', index=False)
 
@@ -21,8 +24,8 @@ plt.figure(figsize=(10, 6))
 sns.boxplot(y=data['price'], showfliers=False)
 
 # Plot outliers in red and non-outliers in blue
-outliers = data[data['label'] == -1]
-non_outliers = data[data['label'] != -1]
+outliers = data[data['outlier'] == 0]
+non_outliers = data[data['outlier'] == 1]
 
 # Plot individual points
 plt.scatter(np.full(non_outliers.shape[0], 0), non_outliers['price'], color='blue', label='Non-Outlier', edgecolor='black')
