@@ -1,1 +1,1 @@
-Including the "Ticker" (person’s/group name) as a feature can indeed introduce bias in the model, especially if there are individuals whose updating "BreadEvenSpread" is consistently higher or lower compared to others. The model may learn this pattern and make assumptions based on the evaluator rather than focusing on "BreadEvenSpread" value.
+
