@@ -1,1 +1,94 @@
+import pandas as pd
+import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Example dataset (replace with your actual dataset)
+data = pd.DataFrame({
+    'price': [500, 15000, 5, 100, 5000, 200, 12000, 8, 9000, 1500, 2500, 3500, 4500],
+    'rating': ['A', 'B', 'WR', 'NR', 'unknown', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'A']
+})
+
+# Flag anomalies based on rating or price thresholds before DBSCAN
+anomaly_conditions = (
+    (data['rating'].isin(['WR', 'NR', 'unknown'])) |
+    (data['price'] > 10000) |
+    (data['price'] < 10)
+)
+data['Is_anomaly_condition'] = anomaly_conditions
+
+# Parameters for DBSCAN specific to each rating
+dbscan_params = {
+    'A': {'eps': 0.5, 'min_samples': 2},
+    'B': {'eps': 0.6, 'min_samples': 3},
+    'C': {'eps': 0.4, 'min_samples': 2}
+}
+
+# Initialize a list to store results for each rating
+all_results = []
+
+# Loop through each unique rating (ignoring the flagged ratings WR, NR, unknown)
+for rating in data['rating'].unique():
+    if rating in ['WR', 'NR', 'unknown']:
+        continue
+
+    # Filter data for the current rating
+    rating_data = data[data['rating'] == rating].copy()
+
+    # Scale the numerical data (important for DBSCAN)
+    scaler = StandardScaler()
+    rating_data['scaled_price'] = scaler.fit_transform(rating_data[['price']])
+
+    # Apply DBSCAN with specific parameters for this rating
+    eps = dbscan_params.get(rating, {}).get('eps', 0.5)  # Default to 0.5 if not found
+    min_samples = dbscan_params.get(rating, {}).get('min_samples', 2)  # Default to 2 if not found
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+    rating_data['label'] = dbscan.fit_predict(rating_data[['scaled_price']])
+
+    # Calculate and print the Silhouette Score if there are more than one cluster
+    unique_labels = set(rating_data['label'])
+    if len(unique_labels) > 1 and -1 not in unique_labels:
+        score = silhouette_score(rating_data[['scaled_price']], rating_data['label'])
+        print(f"Rating: {rating} | Silhouette Score: {score}")
+    else:
+        print(f"Rating: {rating} | Silhouette Score cannot be calculated due to only one cluster or only noise.")
+
+    # Convert labels to True for outliers, False for non-outliers
+    rating_data['Is_outlier_dbscan'] = rating_data['label'] == -1
+
+    # Add the results back to the main dataframe
+    all_results.append(rating_data)
+
+# Concatenate all results
+final_data = pd.concat(all_results)
+
+# Join condition-based anomalies with DBSCAN clustering result
+data = data.merge(final_data[['price', 'rating', 'label', 'Is_outlier_dbscan']], on=['price', 'rating'], how='left')
+
+# Final outlier flag (True if it's an anomaly from either condition-based or DBSCAN)
+data['Is_outlier'] = data['Is_anomaly_condition'] | data['Is_outlier_dbscan']
+
+# Save result to CSV
+data.to_csv('dbscan_outliers_by_rating.csv', index=False)
+
+# Create a box plot
+plt.figure(figsize=(10, 6))
+sns.boxplot(y=data['price'], showfliers=False)
+
+# Plot outliers in red and non-outliers in blue
+outliers = data[data['Is_outlier']]
+non_outliers = data[~data['Is_outlier']]
+
+# Plot individual points
+plt.scatter(np.full(non_outliers.shape[0], 0), non_outliers['price'], color='blue', label='Non-Outlier', edgecolor='black')
+plt.scatter(np.full(outliers.shape[0], 0), outliers['price'], color='red', label='Outlier', edgecolor='black')
+
+# Customize plot
+plt.legend(loc='upper right')
+plt.title('DBSCAN Outlier Detection by Rating Category with Specific Parameters')
+plt.ylabel('Price')
+plt.show()
 
