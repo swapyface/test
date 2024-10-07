@@ -1,0 +1,44 @@
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+
+# Load your dataset
+data = pd.DataFrame({
+    'rating': ['A', 'B', 'WR', 'B', 'NR', 'C', 'unknown', 'A', 'B', 'A', 'B'],
+    'price': [120, 150, 90, 250, 70, 350, 400, 80, 100, 3, 12000]
+})
+
+# Flag ratings WR, NR, or unknown as outliers
+direct_outliers = data[data['rating'].isin(['WR', 'NR', 'unknown'])]
+direct_outliers['outlier'] = -1
+
+# Flag prices less than 5 or greater than 10,000 as outliers
+price_outliers = data[(data['price'] < 5) | (data['price'] > 10000)]
+price_outliers['outlier'] = -1
+
+# Filter remaining data (excluding flagged outliers)
+filtered_data = data[~data.index.isin(direct_outliers.index) & ~data.index.isin(price_outliers.index)]
+
+# Train Isolation Forest on the filtered data
+unique_ratings = filtered_data['rating'].unique()
+outliers = pd.DataFrame()
+
+for rating in unique_ratings:
+    # Filter data for each rating
+    rating_data = filtered_data[filtered_data['rating'] == rating]
+    X = rating_data[['price']]
+
+    # Train Isolation Forest
+    model = IsolationForest(contamination=0.1, random_state=42)
+    model.fit(X)
+
+    # Predict outliers
+    rating_data['outlier'] = model.predict(X)
+
+    # Append to outliers DataFrame
+    outliers = pd.concat([outliers, rating_data])
+
+# Combine direct outliers, price-based outliers, and Isolation Forest results
+final_result = pd.concat([direct_outliers, price_outliers, outliers])
+
+# Display the final result
+print(final_result)
