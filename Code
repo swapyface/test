@@ -10,11 +10,14 @@ import seaborn as sns
 chunk_size = 100000
 chunk_iterator = pd.read_csv('your_large_dataset.csv', chunksize=chunk_size)
 
-# Initialize list to store results
-dbscan_results = []
+# Output file for storing intermediate results
+output_file = 'dbscan_outliers_with_flagged_ratings.csv'
+
+# Initialize a flag for writing header to CSV
+write_header = True
 
 # Process each chunk separately
-for chunk in chunk_iterator:
+for chunk_index, chunk in enumerate(chunk_iterator):
     # Handle missing values
     chunk['price'].fillna(0, inplace=True)
     chunk['rating'].fillna('unknown', inplace=True)
@@ -56,35 +59,34 @@ for chunk in chunk_iterator:
         unique_labels = set(rating_data['label'])
         if len(unique_labels) > 1 and -1 not in unique_labels:
             score = silhouette_score(rating_data[['scaled_price']], rating_data['label'])
-            print(f"Rating: {rating}, Silhouette Score: {score:.2f}")
+            print(f"Chunk: {chunk_index + 1}, Rating: {rating}, Silhouette Score: {score:.2f}")
         else:
-            print(f"Rating: {rating}, Silhouette Score cannot be calculated due to insufficient clusters.")
+            print(f"Chunk: {chunk_index + 1}, Rating: {rating}, Silhouette Score cannot be calculated due to insufficient clusters.")
 
-        # Mark DBSCAN-detected outliers
-        rating_data['Is_outlier'] = rating_data['label'] == -1
+        # Mark labels as "outlier" or "inlier"
+        rating_data['label'] = rating_data['label'].apply(lambda x: 'outlier' if x == -1 else 'inlier')
 
-        # Append the processed data for this rating
-        dbscan_results.append(rating_data)
+        # Append flagged outliers for this rating
+        flagged_outliers = pd.concat([flagged_outliers, rating_data])
 
-    # Append flagged outliers for this chunk
-    dbscan_results.append(flagged_outliers)
+    # Save intermediate results to CSV
+    flagged_outliers.to_csv(output_file, mode='a', header=write_header, index=False)
+    write_header = False  # Only write header for the first chunk
 
-# Concatenate DBSCAN results for all chunks
-final_data = pd.concat(dbscan_results)
+print("Processing completed and results saved to:", output_file)
 
-# Save result to CSV
-final_data.to_csv('dbscan_outliers_with_flagged_ratings.csv', index=False)
+# (Optional) Visualization step for the final data
+final_data = pd.read_csv(output_file)
 
-# Plot results (optional)
 plt.figure(figsize=(10, 6))
 sns.boxplot(y=final_data['price'], showfliers=False)
 
-# Plot outliers in red and non-outliers in blue
-outliers = final_data[final_data['Is_outlier']]
-non_outliers = final_data[~final_data['Is_outlier']]
+# Plot outliers in red and inliers in blue
+outliers = final_data[final_data['label'] == 'outlier']
+inliers = final_data[final_data['label'] == 'inlier']
 
 # Plot individual points
-plt.scatter(np.full(non_outliers.shape[0], 0), non_outliers['price'], color='blue', label='Non-Outlier', edgecolor='black')
+plt.scatter(np.full(inliers.shape[0], 0), inliers['price'], color='blue', label='Inlier', edgecolor='black')
 plt.scatter(np.full(outliers.shape[0], 0), outliers['price'], color='red', label='Outlier', edgecolor='black')
 
 # Customize plot
