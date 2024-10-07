@@ -6,69 +6,71 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Load the dataset
-data = pd.read_csv('your_large_dataset.csv')
+# Load data in chunks to reduce memory usage
+chunk_size = 100000
+chunk_iterator = pd.read_csv('your_large_dataset.csv', chunksize=chunk_size)
 
-# Handle missing values
-data['price'].fillna(0, inplace=True)
-data['rating'].fillna('unknown', inplace=True)
-
-# Flag specific ratings as outliers
-data['Is_outlier'] = data['rating'].isin(['WR', 'NR', 'unknown'])
-
-# Separate flagged data from the rest
-flagged_outliers = data[data['Is_outlier']].copy()
-remaining_data = data[~data['Is_outlier']].copy()
-
-# Process the remaining data using DBSCAN
-unique_ratings = remaining_data['rating'].unique()
-
-# Placeholder to store results
+# Initialize list to store results
 dbscan_results = []
 
-# Iterate over each rating category and process separately
-for rating in unique_ratings:
-    # Filter data for the current rating
-    rating_data = remaining_data[remaining_data['rating'] == rating].copy()
+# Process each chunk separately
+for chunk in chunk_iterator:
+    # Handle missing values
+    chunk['price'].fillna(0, inplace=True)
+    chunk['rating'].fillna('unknown', inplace=True)
 
-    # Scale numerical columns (price)
-    scaler = StandardScaler()
-    rating_data['scaled_price'] = scaler.fit_transform(rating_data[['price']])
+    # Flag specific ratings as outliers
+    chunk['Is_outlier'] = chunk['rating'].isin(['WR', 'NR', 'unknown'])
 
-    # Set DBSCAN parameters based on rating
-    if rating == 'High':
-        eps = 0.8
-        min_samples = 5
-    elif rating == 'Medium':
-        eps = 0.5
-        min_samples = 4
-    else:  # For 'Low'
-        eps = 0.3
-        min_samples = 3
+    # Separate flagged data from the rest
+    flagged_outliers = chunk[chunk['Is_outlier']].copy()
+    remaining_data = chunk[~chunk['Is_outlier']].copy()
 
-    # Apply DBSCAN
-    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-    rating_data['label'] = dbscan.fit_predict(rating_data[['scaled_price']])
+    # Process the remaining data by rating
+    unique_ratings = remaining_data['rating'].unique()
 
-    # Calculate Silhouette Score if more than one cluster is found
-    unique_labels = set(rating_data['label'])
-    if len(unique_labels) > 1 and -1 not in unique_labels:
-        score = silhouette_score(rating_data[['scaled_price']], rating_data['label'])
-        print(f"Rating: {rating}, Silhouette Score: {score:.2f}")
-    else:
-        print(f"Rating: {rating}, Silhouette Score cannot be calculated due to insufficient clusters.")
+    for rating in unique_ratings:
+        # Filter data for the current rating
+        rating_data = remaining_data[remaining_data['rating'] == rating].copy()
 
-    # Mark DBSCAN-detected outliers
-    rating_data['Is_outlier'] = rating_data['label'] == -1
+        # Scale numerical columns (price)
+        scaler = StandardScaler()
+        rating_data['scaled_price'] = scaler.fit_transform(rating_data[['price']])
 
-    # Append the processed data for this rating
-    dbscan_results.append(rating_data)
+        # Set DBSCAN parameters based on rating
+        if rating == 'High':
+            eps = 0.8
+            min_samples = 5
+        elif rating == 'Medium':
+            eps = 0.5
+            min_samples = 4
+        else:  # For 'Low'
+            eps = 0.3
+            min_samples = 3
 
-# Concatenate DBSCAN results for all ratings
-dbscan_data = pd.concat(dbscan_results)
+        # Apply DBSCAN
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+        rating_data['label'] = dbscan.fit_predict(rating_data[['scaled_price']])
 
-# Combine the flagged outliers with the DBSCAN results
-final_data = pd.concat([flagged_outliers, dbscan_data])
+        # Calculate Silhouette Score if more than one cluster is found
+        unique_labels = set(rating_data['label'])
+        if len(unique_labels) > 1 and -1 not in unique_labels:
+            score = silhouette_score(rating_data[['scaled_price']], rating_data['label'])
+            print(f"Rating: {rating}, Silhouette Score: {score:.2f}")
+        else:
+            print(f"Rating: {rating}, Silhouette Score cannot be calculated due to insufficient clusters.")
+
+        # Mark DBSCAN-detected outliers
+        rating_data['Is_outlier'] = rating_data['label'] == -1
+
+        # Append the processed data for this rating
+        dbscan_results.append(rating_data)
+
+    # Append flagged outliers for this chunk
+    dbscan_results.append(flagged_outliers)
+
+# Concatenate DBSCAN results for all chunks
+final_data = pd.concat(dbscan_results)
 
 # Save result to CSV
 final_data.to_csv('dbscan_outliers_with_flagged_ratings.csv', index=False)
