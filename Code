@@ -1,96 +1,61 @@
 import pandas as pd
 import numpy as np
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
+from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Load data in chunks to reduce memory usage
-chunk_size = 100000
-chunk_iterator = pd.read_csv('your_large_dataset.csv', chunksize=chunk_size)
+# Example dataset (replace with your actual dataset)
+data = pd.DataFrame({
+    'price': [500, 520, 550, 1000, 1020, 1500, 2000, 2500, 3000, 3200, 3500, 4000, 4500, 5000, 6000, 7000],
+    'rating': ['Low', 'Low', 'Medium', 'Medium', 'High', 'High', 'Low', 'Medium', 'Medium', 'High', 'Low', 'High', 'Low', 'Medium', 'High', 'unknown'],
+    'person': ['A', 'B', 'A', 'C', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'D']
+})
 
-# Output file for storing intermediate results
-output_file = 'dbscan_outliers_with_flagged_ratings.csv'
+# Handle missing values
+data['price'].fillna(0, inplace=True)  # Fill missing price with 0
+data['rating'].fillna('unknown', inplace=True)  # Fill missing rating with 'unknown'
 
-# Initialize a flag for writing header to CSV
-write_header = True
+# Apply Isolation Forest for each rating category
+outliers_df = pd.DataFrame()  # To store results
 
-# Process each chunk separately
-for chunk_index, chunk in enumerate(chunk_iterator):
-    # Handle missing values
-    chunk['price'].fillna(0, inplace=True)
-    chunk['rating'].fillna('unknown', inplace=True)
+for rating in data['rating'].unique():
+    subset = data[data['rating'] == rating]
+    
+    # Apply IsolationForest
+    isolation_forest = IsolationForest(contamination=0.1, random_state=42)  # You can adjust contamination level
+    subset['anomaly_score'] = isolation_forest.decision_function(subset[['price']])
+    subset['is_outlier'] = isolation_forest.predict(subset[['price']])
 
-    # Flag specific ratings as outliers
-    chunk['Is_outlier'] = chunk['rating'].isin(['WR', 'NR', 'unknown'])
+    # Categorize outlier scores
+    subset['outlier_category'] = pd.cut(subset['anomaly_score'], 
+                                        bins=[-np.inf, -0.7, -0.5, np.inf], 
+                                        labels=['High', 'Medium', 'Low'])
+    
+    outliers_df = pd.concat([outliers_df, subset])
 
-    # Separate flagged data from the rest
-    flagged_outliers = chunk[chunk['Is_outlier']].copy()
-    remaining_data = chunk[~chunk['Is_outlier']].copy()
+# Flag WR, NR, and unknown as direct outliers
+data['direct_flag'] = np.where(data['rating'].isin(['WR', 'NR', 'unknown']), True, False)
 
-    # Process the remaining data by rating
-    unique_ratings = remaining_data['rating'].unique()
+# Merge with outliers detection
+final_df = pd.concat([outliers_df, data[['direct_flag']]], axis=1)
 
-    for rating in unique_ratings:
-        # Filter data for the current rating
-        rating_data = remaining_data[remaining_data['rating'] == rating].copy()
+# Save result to CSV
+final_df.to_csv('isolation_forest_outliers.csv', index=False)
 
-        # Scale numerical columns (price)
-        scaler = StandardScaler()
-        rating_data['scaled_price'] = scaler.fit_transform(rating_data[['price']])
-
-        # Set DBSCAN parameters based on rating
-        if rating == 'High':
-            eps = 0.8
-            min_samples = 5
-        elif rating == 'Medium':
-            eps = 0.5
-            min_samples = 4
-        else:  # For 'Low'
-            eps = 0.3
-            min_samples = 3
-
-        # Apply DBSCAN
-        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-        rating_data['label'] = dbscan.fit_predict(rating_data[['scaled_price']])
-
-        # Calculate Silhouette Score if more than one cluster is found
-        unique_labels = set(rating_data['label'])
-        if len(unique_labels) > 1 and -1 not in unique_labels:
-            score = silhouette_score(rating_data[['scaled_price']], rating_data['label'])
-            print(f"Chunk: {chunk_index + 1}, Rating: {rating}, Silhouette Score: {score:.2f}")
-        else:
-            print(f"Chunk: {chunk_index + 1}, Rating: {rating}, Silhouette Score cannot be calculated due to insufficient clusters.")
-
-        # Mark labels as "outlier" or "inlier"
-        rating_data['label'] = rating_data['label'].apply(lambda x: 'outlier' if x == -1 else 'inlier')
-
-        # Append flagged outliers for this rating
-        flagged_outliers = pd.concat([flagged_outliers, rating_data])
-
-    # Save intermediate results to CSV
-    flagged_outliers.to_csv(output_file, mode='a', header=write_header, index=False)
-    write_header = False  # Only write header for the first chunk
-
-print("Processing completed and results saved to:", output_file)
-
-# (Optional) Visualization step for the final data
-final_data = pd.read_csv(output_file)
-
+# Visualization (optional)
 plt.figure(figsize=(10, 6))
-sns.boxplot(y=final_data['price'], showfliers=False)
+sns.boxplot(y=final_df['price'], showfliers=False)
 
-# Plot outliers in red and inliers in blue
-outliers = final_data[final_data['label'] == 'outlier']
-inliers = final_data[final_data['label'] == 'inlier']
+# Plot outliers
+outliers = final_df[final_df['is_outlier'] == -1]
+non_outliers = final_df[final_df['is_outlier'] != -1]
 
 # Plot individual points
-plt.scatter(np.full(inliers.shape[0], 0), inliers['price'], color='blue', label='Inlier', edgecolor='black')
+plt.scatter(np.full(non_outliers.shape[0], 0), non_outliers['price'], color='blue', label='Non-Outlier', edgecolor='black')
 plt.scatter(np.full(outliers.shape[0], 0), outliers['price'], color='red', label='Outlier', edgecolor='black')
 
 # Customize plot
 plt.legend(loc='upper right')
-plt.title('DBSCAN Outlier Detection with Flagged Ratings')
+plt.title('Isolation Forest Outlier Detection with Price Category')
 plt.ylabel('Price')
 plt.show()
