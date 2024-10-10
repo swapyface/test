@@ -1,0 +1,17 @@
+import pandas as pd
+
+# List of dataset file paths
+file_paths = ['dataset1.csv', 'dataset2.csv', 'dataset3.csv', 'dataset4.csv', 'dataset5.csv']
+
+# Loop through each dataset and calculate count of 0 values in 'price' column
+for file in file_paths:
+    # Load the dataset
+    df = pd.read_csv(file)
+    
+    # Check if 'price' column exists
+    if 'price' in df.columns:
+        # Count 0 values in the 'price' column
+        zero_count = (df['price'] == 0).sum()
+        print(f"Dataset: {file} | Count of 0 values in 'price': {zero_count}")
+    else:
+        print(f"Dataset: {file} | 'price' column not found")
