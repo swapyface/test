@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -8,54 +9,66 @@ import seaborn as sns
 data = pd.DataFrame({
     'price': [500, 520, 550, 1000, 1020, 1500, 2000, 2500, 3000, 3200, 3500, 4000, 4500, 5000, 6000, 7000],
     'rating': ['Low', 'Low', 'Medium', 'Medium', 'High', 'High', 'Low', 'Medium', 'Medium', 'High', 'Low', 'High', 'Low', 'Medium', 'High', 'unknown'],
-    'person': ['A', 'B', 'A', 'C', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'D']
+    'person': ['A', 'B', 'A', 'C', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C', 'D'],
+    'category': ['Electronics', 'Electronics', 'Furniture', 'Furniture', 'Clothing', 'Clothing', 'Electronics', 'Furniture', 'Furniture', 'Clothing', 'Electronics', 'Clothing', 'Electronics', 'Furniture', 'Clothing', 'Unknown']
 })
 
 # Handle missing values
 data['price'].fillna(0, inplace=True)  # Fill missing price with 0
 data['rating'].fillna('unknown', inplace=True)  # Fill missing rating with 'unknown'
+data['category'].fillna('Unknown', inplace=True)  # Fill missing category with 'Unknown'
 
-# Apply Isolation Forest for each rating category
-outliers_df = pd.DataFrame()  # To store results
+# Step 1: Directly flag records with rating 'WR', 'NR', or 'unknown' as anomalies
+direct_flag_data = data[data['rating'].isin(['WR', 'NR', 'unknown'])]
+non_flagged_data = data[~data['rating'].isin(['WR', 'NR', 'unknown'])]
 
-for rating in data['rating'].unique():
-    subset = data[data['rating'] == rating]
-    
-    # Apply IsolationForest
-    isolation_forest = IsolationForest(contamination=0.1, random_state=42)  # You can adjust contamination level
-    subset['anomaly_score'] = isolation_forest.decision_function(subset[['price']])
-    subset['is_outlier'] = isolation_forest.predict(subset[['price']])
+# Mark the directly flagged records with 'High' in outlier_category
+direct_flag_data['is_outlier'] = -1  # Mark as outlier
+direct_flag_data['anomaly_score'] = -1  # Set a custom anomaly score for direct flagging
+direct_flag_data['outlier_category'] = 'High'  # Set outlier category as 'High'
 
-    # Categorize outlier scores
-    subset['outlier_category'] = pd.cut(subset['anomaly_score'], 
-                                        bins=[-np.inf, -0.7, -0.5, np.inf], 
-                                        labels=['High', 'Medium', 'Low'])
-    
-    outliers_df = pd.concat([outliers_df, subset])
+# Step 2: One-hot encode the remaining non-flagged records
+encoder = OneHotEncoder(sparse=False, drop='first')
+encoded_features = encoder.fit_transform(non_flagged_data[['rating', 'category']])
+encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(['rating', 'category']))
 
-# Flag WR, NR, and unknown as direct outliers
-data['direct_flag'] = np.where(data['rating'].isin(['WR', 'NR', 'unknown']), True, False)
+# Concatenate encoded categorical variables with the remaining data
+non_flagged_data = pd.concat([non_flagged_data, encoded_df], axis=1)
 
-# Merge with outliers detection
-final_df = pd.concat([outliers_df, data[['direct_flag']]], axis=1)
+# Step 3: Apply Isolation Forest on non-flagged data
+features = ['price'] + list(encoded_df.columns)
+isolation_forest = IsolationForest(contamination=0.1, random_state=42)
+non_flagged_data['anomaly_score'] = isolation_forest.decision_function(non_flagged_data[features])
+non_flagged_data['is_outlier'] = isolation_forest.predict(non_flagged_data[features])
 
-# Save result to CSV
-final_df.to_csv('isolation_forest_outliers.csv', index=False)
+# Step 4: Categorize outlier scores into High, Medium, and Low
+non_flagged_data['outlier_category'] = pd.cut(non_flagged_data['anomaly_score'], 
+                                              bins=[-np.inf, -0.7, -0.5, np.inf], 
+                                              labels=['High', 'Medium', 'Low'])
 
-# Visualization (optional)
+# Step 5: Combine direct flagged data and IsolationForest results
+final_data = np.vstack([direct_flag_data.values, non_flagged_data.values])
+
+# Convert back to a DataFrame and name the columns accordingly
+final_df = pd.DataFrame(final_data, columns=data.columns.tolist() + ['anomaly_score', 'is_outlier', 'outlier_category'])
+
+# Save the result to CSV
+final_df.to_csv('isolation_forest_outliers_combined.csv', index=False)
+
+# Step 6: Plot the boxplot for the 'price' column
 plt.figure(figsize=(10, 6))
-sns.boxplot(y=final_df['price'], showfliers=False)
+sns.boxplot(y=data['price'], showfliers=False)
 
-# Plot outliers
+# Separate outliers and non-outliers for plotting
 outliers = final_df[final_df['is_outlier'] == -1]
 non_outliers = final_df[final_df['is_outlier'] != -1]
 
-# Plot individual points
+# Plot individual points: blue for non-outliers, red for outliers
 plt.scatter(np.full(non_outliers.shape[0], 0), non_outliers['price'], color='blue', label='Non-Outlier', edgecolor='black')
 plt.scatter(np.full(outliers.shape[0], 0), outliers['price'], color='red', label='Outlier', edgecolor='black')
 
 # Customize plot
 plt.legend(loc='upper right')
-plt.title('Isolation Forest Outlier Detection with Price Category')
+plt.title('Isolation Forest Outlier Detection with Direct Flagging')
 plt.ylabel('Price')
 plt.show()
