@@ -1,10 +1,8 @@
-    # Get anomaly scores (decision_function returns the opposite of anomaly score)
-    scores = model.decision_function(X)
-    
-    # Normalize scores to range between 0 and 1 (for probability)
-    # Since lower scores indicate outliers, we subtract the min and divide by the range
-    normalized_scores = (scores - scores.min()) / (scores.max() - scores.min())
-    
-    # Assign probability levels based on normalized scores
-    rating_data['level'] = normalized_scores.apply(categorize_level)
+ def categorize_level(score):
+    if score >= 0.9:
+        return "high"
+    elif 0.7 <= score < 0.9:
+        return "medium"
+    else:
+        return "low"
     
