@@ -1,8 +1,1 @@
- def categorize_level(score):
-    if score >= 0.9:
-        return "high"
-    elif 0.7 <= score < 0.9:
-        return "medium"
-    else:
-        return "low"
-    
+filtered_data['level'] = [categorize_level(score, label) for score, label in zip(normalized_scores_series, filtered_data['outlier'].replace({-1: "outlier", 1: "inlier"}))]
