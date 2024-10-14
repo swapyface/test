@@ -1,20 +1,9 @@
-import pandas as pd
-from sklearn.metrics import confusion_matrix
-
-# Sample dataset
-data = {
-    'ModelPredicted': ['inlier', 'outlier', 'exclude', 'inlier', 'check', 'outlier'],
-    'GroundTruth': ['inlier', 'outlier', 'inlier', 'outlier', 'exclude', 'inlier']
-}
-
-# Convert to DataFrame
-df = pd.DataFrame(data)
-
-# Filter out rows that contain 'exclude' or 'check' in either column
-filtered_df = df[df['ModelPredicted'].isin(['inlier', 'outlier']) & df['GroundTruth'].isin(['inlier', 'outlier'])]
-
-# Create confusion matrix
-conf_matrix = confusion_matrix(filtered_df['GroundTruth'], filtered_df['ModelPredicted'], labels=['inlier', 'outlier'])
+tn, fp, fn, tp = conf_matrix.ravel()
 
 print("Confusion Matrix:")
 print(conf_matrix)
+
+print(f"True Positives (TP): {tp}")
+print(f"False Positives (FP): {fp}")
+print(f"False Negatives (FN): {fn}")
+print(f"True Negatives (TN): {tn}")
