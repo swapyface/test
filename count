@@ -1,3 +1,51 @@
+
+
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+from scipy.stats import zscore
+
+# Example dataset (replace with your own data)
+# Assuming 'price' is numerical and other columns are categorical
+data = pd.DataFrame({
+    'price': np.random.normal(100, 20, 300000),  # Example numerical column
+    'category_1': np.random.choice(['A', 'B', 'C'], size=300000),  # Example categorical column
+    'category_2': np.random.choice(['X', 'Y', 'Z'], size=300000)   # Another categorical column
+})
+
+# Preprocessing (one-hot encoding for categorical variables)
+data_encoded = pd.get_dummies(data, drop_first=True)
+
+# Isolation Forest Model
+model = IsolationForest(contamination=0.05, random_state=42)
+model.fit(data_encoded)
+
+# Predicting anomalies (-1 = outlier, 1 = inlier)
+predictions = model.predict(data_encoded)
+
+# Extract anomaly scores (lower score means more likely to be an outlier)
+anomaly_scores = model.decision_function(data_encoded)
+
+# Step 1: Calculate z-scores for anomaly scores
+z_scores = zscore(anomaly_scores)
+
+# Step 2: Create a new DataFrame with predictions and z-scores
+result_df = data.copy()
+result_df['anomaly_score'] = anomaly_scores
+result_df['z_score'] = z_scores
+result_df['prediction'] = predictions
+
+# Step 3: Print or inspect results
+print(result_df.head())
+
+# Optional: Flagging high z-scores as potential outliers
+# Typically, z-scores greater than 2 or less than -2 can be considered significant
+result_df['z_score_outlier'] = result_df['z_score'].apply(lambda x: 1 if abs(x) > 2 else 0)
+
+# Show flagged data points
+print(result_df[result_df['z_score_outlier'] == 1])
+
+
 import pandas as pd
 
 # List of dataset file paths
