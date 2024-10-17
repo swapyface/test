@@ -1,12 +1,10 @@
-
-
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 from scipy.stats import zscore
+from sklearn.metrics import confusion_matrix, classification_report
 
 # Example dataset (replace with your own data)
-# Assuming 'price' is numerical and other columns are categorical
 data = pd.DataFrame({
     'price': np.random.normal(100, 20, 300000),  # Example numerical column
     'category_1': np.random.choice(['A', 'B', 'C'], size=300000),  # Example categorical column
@@ -29,37 +27,16 @@ anomaly_scores = model.decision_function(data_encoded)
 # Step 1: Calculate z-scores for anomaly scores
 z_scores = zscore(anomaly_scores)
 
-# Step 2: Create a new DataFrame with predictions and z-scores
-result_df = data.copy()
-result_df['anomaly_score'] = anomaly_scores
-result_df['z_score'] = z_scores
-result_df['prediction'] = predictions
+# Step 2: Define threshold for labeling outliers based on z-scores
+# For instance, if |z-score| > 2, we consider it an outlier
+z_score_labels = np.where(abs(z_scores) > 2, -1, 1)  # -1 for outliers, 1 for inliers
 
-# Step 3: Print or inspect results
-print(result_df.head())
+# Step 3: Create confusion matrix comparing model predictions with z-score labels
+cm = confusion_matrix(z_score_labels, predictions, labels=[-1, 1])
 
-# Optional: Flagging high z-scores as potential outliers
-# Typically, z-scores greater than 2 or less than -2 can be considered significant
-result_df['z_score_outlier'] = result_df['z_score'].apply(lambda x: 1 if abs(x) > 2 else 0)
+# Display the confusion matrix
+print("Confusion Matrix:\n", cm)
 
-# Show flagged data points
-print(result_df[result_df['z_score_outlier'] == 1])
-
-
-import pandas as pd
-
-# List of dataset file paths
-file_paths = ['dataset1.csv', 'dataset2.csv', 'dataset3.csv', 'dataset4.csv', 'dataset5.csv']
-
-# Loop through each dataset and calculate count of 0 values in 'price' column
-for file in file_paths:
-    # Load the dataset
-    df = pd.read_csv(file)
-    
-    # Check if 'price' column exists
-    if 'price' in df.columns:
-        # Count 0 values in the 'price' column
-        zero_count = (df['price'] == 0).sum()
-        print(f"Dataset: {file} | Count of 0 values in 'price': {zero_count}")
-    else:
-        print(f"Dataset: {file} | 'price' column not found")
+# Generate a classification report to understand precision, recall, F1-score
+report = classification_report(z_score_labels, predictions, target_names=['Outliers', 'Inliers'])
+print("\nClassification Report:\n", report)
