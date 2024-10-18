@@ -1,30 +1,42 @@
-tn, fp, fn, tp = conf_matrix.ravel()
-
-print("Confusion Matrix:")
-print(conf_matrix)
-
-print(f"True Positives (TP): {tp}")
-print(f"False Positives (FP): {fp}")
-print(f"False Negatives (FN): {fn}")
-print(f"True Negatives (TN): {tn}")
-
-
-
-
 import pandas as pd
+import os
 
 def preprocessing(file_path):
-    # Load the dataset
-    data = pd.read_csv(file_path)
-    
-    # Fill missing values
-    data['price'].fillna(0, inplace=True)
-    data['rating'].fillna('unknown', inplace=True)
+    try:
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"The file {file_path} does not exist.")
+        
+        # Load the dataset
+        data = pd.read_csv(file_path)
+        
+        # Check if required columns are present
+        required_columns = ['price', 'rating']
+        for col in required_columns:
+            if col not in data.columns:
+                raise KeyError(f"The required column '{col}' is missing in the dataset.")
+        
+        # Fill missing values
+        data['price'].fillna(0, inplace=True)
+        data['rating'].fillna('unknown', inplace=True)
 
-    # Flag certain records directly based on the 'rating' column and 'price'
-    flag_condition = (data['rating'].isin(['WR', 'NR', 'unknown'])) | (data['price'] > 10000) | (data['price'] < 10)
-    
-    flagged_data = data[flag_condition]  # Data that meets the flagging criteria
-    non_flagged_data = data[~flag_condition]  # Remaining data for further processing
-    
-    return flagged_data, non_flagged_data
+        # Flag certain records directly based on the 'rating' column and 'price'
+        flag_condition = (data['rating'].isin(['WR', 'NR', 'unknown'])) | (data['price'] > 10000) | (data['price'] < 10)
+        
+        flagged_data = data[flag_condition]  # Data that meets the flagging criteria
+        non_flagged_data = data[~flag_condition]  # Remaining data for further processing
+        
+        return flagged_data, non_flagged_data
+
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        return None, None
+    except KeyError as e:
+        print(f"Error: {e}")
+        return None, None
+    except pd.errors.EmptyDataError:
+        print("Error: The file is empty.")
+        return None, None
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return None, None
