@@ -10,16 +10,21 @@ def preprocessing(file_path):
         # Load the dataset
         data = pd.read_csv(file_path)
         
+        # Fill missing values based on column data types
+        for col in data.columns:
+            if pd.api.types.is_object_dtype(data[col]):
+                data[col].fillna('unknown', inplace=True)  # Fill missing for categorical/object columns
+            elif pd.api.types.is_numeric_dtype(data[col]):
+                data[col].fillna(0, inplace=True)  # Fill missing for numerical columns
+            elif pd.api.types.is_datetime64_any_dtype(data[col]):
+                data[col].fillna(pd.Timestamp('1970-01-01'), inplace=True)  # Fill missing for date columns
+
         # Check if required columns are present
         required_columns = ['price', 'rating']
         for col in required_columns:
             if col not in data.columns:
                 raise KeyError(f"The required column '{col}' is missing in the dataset.")
         
-        # Fill missing values
-        data['price'].fillna(0, inplace=True)
-        data['rating'].fillna('unknown', inplace=True)
-
         # Flag certain records directly based on the 'rating' column and 'price'
         flag_condition = (data['rating'].isin(['WR', 'NR', 'unknown'])) | (data['price'] > 10000) | (data['price'] < 10)
         
