@@ -7,3 +7,24 @@ print(f"True Positives (TP): {tp}")
 print(f"False Positives (FP): {fp}")
 print(f"False Negatives (FN): {fn}")
 print(f"True Negatives (TN): {tn}")
+
+
+
+
+import pandas as pd
+
+def preprocessing(file_path):
+    # Load the dataset
+    data = pd.read_csv(file_path)
+    
+    # Fill missing values
+    data['price'].fillna(0, inplace=True)
+    data['rating'].fillna('unknown', inplace=True)
+
+    # Flag certain records directly based on the 'rating' column and 'price'
+    flag_condition = (data['rating'].isin(['WR', 'NR', 'unknown'])) | (data['price'] > 10000) | (data['price'] < 10)
+    
+    flagged_data = data[flag_condition]  # Data that meets the flagging criteria
+    non_flagged_data = data[~flag_condition]  # Remaining data for further processing
+    
+    return flagged_data, non_flagged_data
