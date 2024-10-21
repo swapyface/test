@@ -1,2 +1,3 @@
-# Filter for records where 'is_outlier' is either 'exclude' or 'outlier'
-exclude_or_outlier_data = data[data['is_outlier'].isin(['exclude', 'outlier'])]
+data[['is_outlier', 'comment']] = data['rating'].apply(
+    lambda x: pd.Series(('exclude', 'rating is blank')) if x in ['WR', 'NR'] else pd.Series(('', ''))
+)
