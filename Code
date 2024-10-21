@@ -1,4 +1,2 @@
-flagged_data = data[data['is_outlier'] == 'exclude']
-
-# Filter for non-flagged records (non-outliers)
-non_flagged_data = data[data['is_outlier'] != 'exclude']
+# Filter for records where 'is_outlier' is either 'exclude' or 'outlier'
+exclude_or_outlier_data = data[data['is_outlier'].isin(['exclude', 'outlier'])]
