@@ -1,3 +1,13 @@
-data[['is_outlier', 'comment']] = data['rating'].apply(
-    lambda x: pd.Series(('exclude', 'rating is blank')) if x in ['WR', 'NR'] else pd.Series(('', ''))
-)
+categorical_columns = ['col1', 'col2', 'col3', 'col4', 'col5']
+
+# Combined function to flag outliers and set the comment
+data[['is_outlier', 'comment']] = data.apply(
+    lambda row: (
+        ('outlier', 'contains WR or NR')  # Flag for categorical column
+        if any(val in ['WR', 'NR'] for val in row[categorical_columns]) else
+        ('outlier', 'price out of range')  # Flag for price, only if not already flagged
+        if (row['price'] < 5 or row['price'] > 10000) and row['is_outlier'] == '' else
+        ('', '')  # No flag
+    ),
+    axis=1
+).apply(pd.Series)
