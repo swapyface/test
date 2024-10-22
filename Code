@@ -1,13 +1,18 @@
-categorical_columns = ['col1', 'col2', 'col3', 'col4', 'col5']
+# main.py
 
-# Combined function to flag outliers and set the comment
-data[['is_outlier', 'comment']] = data.apply(
-    lambda row: (
-        ('outlier', 'contains WR or NR')  # Flag for categorical column
-        if any(val in ['WR', 'NR'] for val in row[categorical_columns]) else
-        ('outlier', 'price out of range')  # Flag for price, only if not already flagged
-        if (row['price'] < 5 or row['price'] > 10000) and row['is_outlier'] == '' else
-        ('', '')  # No flag
-    ),
-    axis=1
-).apply(pd.Series)
+# Import functions from preprocessing.py
+from preprocessing import clean_data, encode_data
+
+def main():
+    # Example dataset
+    data = {"some": "data"}
+
+    # Call the preprocessing functions
+    cleaned_data = clean_data(data)
+    encoded_data = encode_data(cleaned_data)
+
+    # Continue with other operations
+    print("Final data:", encoded_data)
+
+if __name__ == "__main__":
+    main()
