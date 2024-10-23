@@ -1,108 +1,125 @@
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
+import numpy as np
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
 class Preprocessor:
-    def __init__(self, missing_value_fillers=None):
-        # Define how to handle missing values by data type
-        if missing_value_fillers is None:
-            self.missing_value_fillers = {'object': 'unknown', 'number': 0, 'date': '1970-01-01'}
-        else:
-            self.missing_value_fillers = missing_value_fillers
+    def __init__(self, file_path, required_columns):
+        self.file_path = file_path
+        self.required_columns = required_columns
 
-    def fill_missing_values(self, data):
-        """Fills missing values based on column data types."""
+    def load_data(self):
+        try:
+            data = pd.read_csv(self.file_path)
+            print(f"File '{self.file_path}' loaded successfully.")
+            return data
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File '{self.file_path}' not found.")
+        except pd.errors.EmptyDataError:
+            raise ValueError(f"File '{self.file_path}' is empty.")
+        except Exception as e:
+            raise Exception(f"An error occurred while loading the file: {e}")
+
+    def validate_columns(self, data):
+        missing_columns = [col for col in self.required_columns if col not in data.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+        print("All required columns are present.")
+
+    def handle_missing_values(self, data):
         for col in data.columns:
-            if pd.api.types.is_object_dtype(data[col]):
-                data[col].fillna(self.missing_value_fillers['object'], inplace=True)
-            elif pd.api.types.is_numeric_dtype(data[col]):
-                data[col].fillna(self.missing_value_fillers['number'], inplace=True)
+            if pd.api.types.is_numeric_dtype(data[col]):
+                data[col].fillna(0, inplace=True)
+            elif pd.api.types.is_object_dtype(data[col]):
+                data[col].fillna("unknown", inplace=True)
             elif pd.api.types.is_datetime64_any_dtype(data[col]):
-                data[col].fillna(pd.Timestamp(self.missing_value_fillers['date']), inplace=True)
+                data[col].fillna(pd.to_datetime("0000-00-00", errors='coerce'), inplace=True)
         return data
 
-    def encode_categorical(self, data, categorical_columns):
-        """Encodes categorical columns using OneHotEncoder."""
-        encoder = OneHotEncoder(sparse=False, drop='first')
-        encoded = encoder.fit_transform(data[categorical_columns])
-        encoded_df = pd.DataFrame(encoded, columns=encoder.get_feature_names_out(categorical_columns))
-        data = pd.concat([data.drop(categorical_columns, axis=1), encoded_df], axis=1)
-        return data
+    def preprocess(self):
+        # Load the dataset
+        data = self.load_data()
 
+        # Validate the required columns
+        self.validate_columns(data)
 
+        # Handle missing values
+        data = self.handle_missing_values(data)
 
+        # Standardize numerical columns (e.g., 'price')
+        scaler = StandardScaler()
+        if 'price' in data.columns:
+            data['scaled_price'] = scaler.fit_transform(data[['price']])
+
+        # One-hot encode categorical columns (e.g., 'rating')
+        encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+        if 'rating' in data.columns:
+            rating_encoded = encoder.fit_transform(data[['rating']])
+            rating_encoded_df = pd.DataFrame(rating_encoded, columns=encoder.get_feature_names_out(['rating']))
+            data = pd.concat([data, rating_encoded_df], axis=1)
+
+        # Flag records with WR, NR, or unknown ratings
+        flagged_data = data[data['rating'].isin(['WR', 'NR', 'unknown'])]
+        non_flagged_data = data[~data['rating'].isin(['WR', 'NR', 'unknown'])]
+
+        return flagged_data, non_flagged_data
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.ensemble import IsolationForest
-import numpy as np
-from preprocessing import Preprocessor  # Import the Preprocessor class
+from preprocessing import preprocess_data
+import logging
 
-class OutlierDetector:
-    def __init__(self, model_params=None):
-        if model_params is None:
-            model_params = {'n_estimators': 100, 'max_samples': 'auto', 'contamination': 0.05, 'random_state': 42}
-        self.model = IsolationForest(**model_params)
-
-    def fit_predict(self, data, features):
-        """Fit the model and predict outliers."""
-        self.model.fit(data[features])
-        outlier_scores = self.model.decision_function(data[features])
-        data['outlier_score'] = outlier_scores
-
-        # Label as high, medium, or low based on the score threshold
-        data['outlier_label'] = np.where(outlier_scores > 0.9, 'High',
-                                         np.where(outlier_scores > 0.7, 'Medium', 'Low'))
-        return data
-
-class RatingOutlierPipeline:
+class OutlierModel:
     def __init__(self):
-        self.preprocessor = Preprocessor()  # Use the Preprocessor from the separate file
         self.scaler = StandardScaler()
+        self.encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
 
-    def process_rating_data(self, data, rating_column, price_column):
-        """Process each rating separately."""
-        unique_ratings = data[rating_column].unique()
-        final_results = []
+    def set_model_params(self, data_length):
+        # Set model parameters based on the data length
+        if data_length > 50000:
+            return IsolationForest(n_estimators=200, max_samples=0.8, contamination=0.05, random_state=42)
+        else:
+            return IsolationForest(n_estimators=100, max_samples='auto', contamination=0.1, random_state=42)
 
-        for rating in unique_ratings:
-            print(f"Processing rating: {rating}")
+    def fit_predict(self, df):
+        try:
+            # Standardizing the 'price' column
+            df['scaled_price'] = self.scaler.fit_transform(df[['price']])
+            
+            # Encoding categorical columns
+            cat_columns = df.select_dtypes(include=['object']).columns
+            if len(cat_columns) > 0:
+                encoded_data = self.encoder.fit_transform(df[cat_columns])
+                df = pd.concat([df, pd.DataFrame(encoded_data)], axis=1)
 
-            # Filter data for each rating
-            rating_data = data[data[rating_column] == rating].copy()
+            # Adjust model parameters dynamically
+            model = self.set_model_params(len(df))
+            df['outlier_score'] = model.fit_predict(df[['scaled_price']])
+            df['outlier_label'] = df['outlier_score'].apply(lambda x: 'Outlier' if x == -1 else 'Inlier')
 
-            # Preprocessing: Fill missing values
-            rating_data = self.preprocessor.fill_missing_values(rating_data)
+            return df
+        except Exception as e:
+            logging.error(f"Error in fit_predict: {e}")
+            return pd.DataFrame()  # Return empty DataFrame in case of error
 
-            # Scaling the price column
-            rating_data[price_column] = self.scaler.fit_transform(rating_data[[price_column]])
-
-            # Detect anomalies (skip flagged records)
-            flagged_data = rating_data[(rating_data['rating'] == 'WR') | (rating_data['rating'] == 'NR') | 
-                                       (rating_data[price_column] > 10000) | (rating_data[price_column] < 10)]
-            non_flagged_data = rating_data[~rating_data.index.isin(flagged_data.index)]
-
-            # Model-based outlier detection
-            outlier_detector = OutlierDetector()
-            non_flagged_data = outlier_detector.fit_predict(non_flagged_data, features=[price_column])
-
-            # Combine flagged and model-predicted data
-            final_rating_data = pd.concat([flagged_data, non_flagged_data], axis=0)
-            final_results.append(final_rating_data)
-
-        # Concatenate all results back together
-        final_df = pd.concat(final_results, axis=0)
-        return final_df
-
-# Main program
 if __name__ == "__main__":
-    # Load your dataset
-    file_path = 'path_to_your_file.csv'
-    data = pd.read_csv(file_path)
-    
-    # Initialize the pipeline
-    pipeline = RatingOutlierPipeline()
+    try:
+        # Load and preprocess data
+        rating_categories = ['Low', 'Medium', 'High']  # Example categories
+        for rating in rating_categories:
+            df_flagged, df_non_flagged = preprocess_data(rating)
+            if df_non_flagged.empty:
+                logging.warning(f"No non-flagged data for rating: {rating}")
+                continue
 
-    # Process data by rating and detect outliers
-    result = pipeline.process_rating_data(data, rating_column='rating', price_column='price')
+            # Model training and prediction
+            model = OutlierModel()
+            result_df = model.fit_predict(df_non_flagged)
 
-    # Save the result
-    result.to_csv('outlier_detection_result.csv', index=False)
+            # Combine flagged and non-flagged data
+            final_df = pd.concat([df_flagged, result_df])
+
+            # Save the result
+            final_df.to_csv(f"outlier_results_{rating}.csv", index=False)
+    except Exception as e:
+        logging.error(f"Error in main program: {e}")
+
