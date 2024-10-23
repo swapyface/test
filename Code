@@ -4,6 +4,13 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
 class Preprocessor:
     def __init__(self, file_path, required_columns):
+        """
+        Initialize the Preprocessor class with file path and required columns.
+
+        Parameters:
+        - file_path: Path to the CSV file.
+        - required_columns: List of columns required by the model for validation.
+        """
         self.file_path = file_path
         self.required_columns = required_columns
 
@@ -20,22 +27,35 @@ class Preprocessor:
             raise Exception(f"An error occurred while loading the file: {e}")
 
     def validate_columns(self, data):
+        """
+        Validate that the dataset contains the required columns for the model.
+        """
         missing_columns = [col for col in self.required_columns if col not in data.columns]
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
         print("All required columns are present.")
 
     def handle_missing_values(self, data):
+        """
+        Fill missing values based on data type:
+        - Numeric columns: Fill with 0.
+        - Object (categorical) columns: Fill with 'unknown'.
+        - Date columns: Fill with a default value '1900-01-01'.
+        """
         for col in data.columns:
             if pd.api.types.is_numeric_dtype(data[col]):
                 data[col].fillna(0, inplace=True)
             elif pd.api.types.is_object_dtype(data[col]):
                 data[col].fillna("unknown", inplace=True)
             elif pd.api.types.is_datetime64_any_dtype(data[col]):
-                data[col].fillna(pd.to_datetime("0000-00-00", errors='coerce'), inplace=True)
+                data[col].fillna(pd.to_datetime("1900-01-01", errors='coerce'), inplace=True)
         return data
 
     def preprocess(self):
+        """
+        Execute the preprocessing steps: load data, validate columns, handle missing values,
+        standardize numerical columns, and one-hot encode categorical columns.
+        """
         # Load the dataset
         data = self.load_data()
 
@@ -62,64 +82,3 @@ class Preprocessor:
         non_flagged_data = data[~data['rating'].isin(['WR', 'NR', 'unknown'])]
 
         return flagged_data, non_flagged_data
-import pandas as pd
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.ensemble import IsolationForest
-from preprocessing import preprocess_data
-import logging
-
-class OutlierModel:
-    def __init__(self):
-        self.scaler = StandardScaler()
-        self.encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
-
-    def set_model_params(self, data_length):
-        # Set model parameters based on the data length
-        if data_length > 50000:
-            return IsolationForest(n_estimators=200, max_samples=0.8, contamination=0.05, random_state=42)
-        else:
-            return IsolationForest(n_estimators=100, max_samples='auto', contamination=0.1, random_state=42)
-
-    def fit_predict(self, df):
-        try:
-            # Standardizing the 'price' column
-            df['scaled_price'] = self.scaler.fit_transform(df[['price']])
-            
-            # Encoding categorical columns
-            cat_columns = df.select_dtypes(include=['object']).columns
-            if len(cat_columns) > 0:
-                encoded_data = self.encoder.fit_transform(df[cat_columns])
-                df = pd.concat([df, pd.DataFrame(encoded_data)], axis=1)
-
-            # Adjust model parameters dynamically
-            model = self.set_model_params(len(df))
-            df['outlier_score'] = model.fit_predict(df[['scaled_price']])
-            df['outlier_label'] = df['outlier_score'].apply(lambda x: 'Outlier' if x == -1 else 'Inlier')
-
-            return df
-        except Exception as e:
-            logging.error(f"Error in fit_predict: {e}")
-            return pd.DataFrame()  # Return empty DataFrame in case of error
-
-if __name__ == "__main__":
-    try:
-        # Load and preprocess data
-        rating_categories = ['Low', 'Medium', 'High']  # Example categories
-        for rating in rating_categories:
-            df_flagged, df_non_flagged = preprocess_data(rating)
-            if df_non_flagged.empty:
-                logging.warning(f"No non-flagged data for rating: {rating}")
-                continue
-
-            # Model training and prediction
-            model = OutlierModel()
-            result_df = model.fit_predict(df_non_flagged)
-
-            # Combine flagged and non-flagged data
-            final_df = pd.concat([df_flagged, result_df])
-
-            # Save the result
-            final_df.to_csv(f"outlier_results_{rating}.csv", index=False)
-    except Exception as e:
-        logging.error(f"Error in main program: {e}")
-
