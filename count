@@ -17,3 +17,41 @@ df['months_remaining'] = (df['maturity'].dt.year - df['reval'].dt.year) * 12 + (
 df = df[df['months_remaining'] >= 0]
 
 print(df)
+
+# class_b.py
+class B:
+    def function_1(self, x, y):
+        # Perform some calculation
+        result = x + y
+        print(f"In function_1 of Class B, calculated result: {result}")
+        
+        # Call function_2 with the calculated result as a parameter
+        self.function_2(result)
+
+    def function_2(self, result):
+        print(f"In function_2 of Class B, received result: {result}")
+        # Further processing with result
+        final_result = result * 2
+        print(f"Final result in function_2: {final_result
+
+
+# class_a.py
+from class_b import B  # Import Class B
+
+class A:
+    def __init__(self):
+        # Create an instance of Class B
+        self.b_instance = B()
+
+    def call_b_function_1(self, x, y):
+        print("Calling function_1 of Class B from Class A")
+        # Call function_1 of Class B with parameters x and y
+        self.b_instance.function_1(x, y)
+
+
+# main.py
+from class_a import A  # Import Class A
+
+# Instantiate Class A and call the method
+a_instance = A()
+a_instance.call_b_function_1(5, 10)
