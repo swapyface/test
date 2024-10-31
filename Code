@@ -1,0 +1,4 @@
+from sklearn.svm import SVR
+
+model = SVR(kernel='rbf', C=1.0, epsilon=0.1)
+model.fit(X, y)
