@@ -1,0 +1,70 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVR
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+# Sample dataset with additional columns
+# Load your data
+# df = pd.read_csv('your_data.csv')
+df = pd.DataFrame({
+    'bond_id': [101, 102, 103, 104, 105, 106, 107],  # Example extra column
+    'issue_date': ['2023-01-01', '2023-01-05', '2023-02-01', '2023-02-05', '2023-03-01', '2023-03-05', '2023-04-01'],  # Example extra column
+    'rating': ['A', 'BBB', 'AA', 'A', 'BB', 'AAA', 'B'],
+    'industry_level': ['financial', 'industrial', 'financial', 'sovereign', 'industrial', 'sovereign', 'financial'],
+    'subordination': ['senior', 'junior', 'senior', 'senior', 'junior', 'senior', 'senior'],
+    'time_to_maturity': [365, 720, 180, 540, 365, 1080, 450],
+    'break_even_spread': [100, 150, 120, 130, 110, 160, 115]
+})
+
+# Separate features, target variable, and extra columns
+extra_columns = ['bond_id', 'issue_date']  # Extra columns to keep in results
+X = df.drop(columns=['break_even_spread'] + extra_columns)
+y = df['break_even_spread']
+extra_data = df[extra_columns]
+
+# Identify categorical and numerical columns
+categorical_features = ['rating', 'industry_level', 'subordination']
+numerical_features = ['time_to_maturity']
+
+# Preprocessing pipeline
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', StandardScaler(), numerical_features),
+        ('cat', OneHotEncoder(drop='first'), categorical_features)])
+
+# Create SVR model pipeline
+model = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('regressor', SVR(kernel='rbf', C=1.0, epsilon=0.1))
+])
+
+# Split data into train and test sets, ensuring extra columns are also split
+X_train, X_test, y_train, y_test, extra_train, extra_test = train_test_split(
+    X, y, extra_data, test_size=0.2, random_state=42
+)
+
+# Train the model
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Check if predictions are within 20% of actual values
+result = pd.DataFrame({
+    'Actual': y_test,
+    'Predicted': y_pred
+})
+result['Within_20_Percent'] = abs((result['Predicted'] - result['Actual']) / result['Actual']) <= 0.2
+result['Result'] = result['Within_20_Percent'].apply(lambda x: 'Good' if x else 'Bad')
+
+# Combine test features, extra columns, and result into final output
+final_output = X_test.reset_index(drop=True).join(extra_test.reset_index(drop=True))
+final_output = final_output.join(result.reset_index(drop=True))
+
+# Save results to CSV
+final_output.to_csv('model_results_with_extra_columns.csv', index=False)
+
+# Print sample output
+print(final_output)
