@@ -1,25 +1,30 @@
 import pandas as pd
 
-# Sample DataFrame
+# Sample DataFrame with multiple categorical and numerical columns
 data = {
-    'numerical_column': [3, 100, 15000, 50, 2],
-    'categorical_column': ['A', 'UNKNOWN', 'NR', 'B', 'A']
+    'num_col1': [3, 100, 15000, 50, 2],
+    'num_col2': [6000, 150, 200, 8, 20000],
+    'cat_col1': ['A', 'UNKNOWN', 'NR', 'B', 'A'],
+    'cat_col2': ['X', 'Y', 'UNKNOWN', 'Z', 'NR']
 }
 df = pd.DataFrame(data)
 
-# Define a single lambda function to set both 'Is Outlier' and 'Comment' columns
-df[['Is Outlier', 'Comment']] = df.apply(
-    lambda row: (
-        'Yes' if row['categorical_column'] in ['UNKNOWN', 'NR'] or 
-                 row['numerical_column'] < 5 or 
-                 row['numerical_column'] > 10000 
-        else 'No',
-        'Unknown' if row['categorical_column'] in ['UNKNOWN', 'NR'] else 
-        'Out of range' if row['numerical_column'] < 5 or row['numerical_column'] > 10000 else ''
-    ),
-    axis=1,
-    result_type='expand'
-)
+# Define the function to check for outliers in both categorical and numerical columns
+def check_outliers(row):
+    # Check categorical columns
+    cat_outlier = any(row[col] in ['UNKNOWN', 'NR'] for col in ['cat_col1', 'cat_col2'])
+    
+    # Check numerical columns
+    num_outlier = any(row[col] < 5 or row[col] > 10000 for col in ['num_col1', 'num_col2'])
+    
+    # Determine 'Is Outlier' and 'Comment' based on conditions
+    is_outlier = 'Yes' if cat_outlier or num_outlier else 'No'
+    comment = 'Unknown' if cat_outlier else 'Out of range' if num_outlier else ''
+    
+    return is_outlier, comment
+
+# Apply the function to each row to create 'Is Outlier' and 'Comment' columns
+df[['Is Outlier', 'Comment']] = df.apply(check_outliers, axis=1, result_type='expand')
 
 # Display the resulting DataFrame
 print(df)
