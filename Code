@@ -1,28 +1,25 @@
 import pandas as pd
-import numpy as np
 
 # Sample DataFrame
-data = {'Category': ['A', 'B', 'C', 'A', 'D', 'B', 'E']}
+data = {
+    'numerical_column': [3, 100, 15000, 50, 2],
+    'categorical_column': ['A', 'UNKNOWN', 'NR', 'B', 'A']
+}
 df = pd.DataFrame(data)
 
-# Categories to drop
-categories_to_drop = ['B', 'D']
+# Define a single lambda function to set both 'Is Outlier' and 'Comment' columns
+df[['Is Outlier', 'Comment']] = df.apply(
+    lambda row: (
+        'Yes' if row['categorical_column'] in ['UNKNOWN', 'NR'] or 
+                 row['numerical_column'] < 5 or 
+                 row['numerical_column'] > 10000 
+        else 'No',
+        'Unknown' if row['categorical_column'] in ['UNKNOWN', 'NR'] else 
+        'Out of range' if row['numerical_column'] < 5 or row['numerical_column'] > 10000 else ''
+    ),
+    axis=1,
+    result_type='expand'
+)
 
-# Replace unwanted categories with NaN
-df['Category'] = df['Category'].replace(categories_to_drop, np.nan)
-
-# Drop rows with NaN if needed
-df = df.dropna(subset=['Category'])
-
+# Display the resulting DataFrame
 print(df)
-
-
-
-
-
-df['date_column'] = pd.to_datetime(df['date_column']).astype('datetime64[ms]')
-import pandas as pd
-import numpy as np
-
-# Example: replace out-of-range dates with NaT (Not a Time)
-df['date_column'] = pd.to_datetime(df['date_column'], errors='coerce')
