@@ -1,2 +1,10 @@
-# Replace out-of-range dates with a specific date (e.g., '1900-01-01')
-df['date_column'] = pd.to_datetime(df['date_column'], errors='coerce').fillna(pd.Timestamp('1900-01-01'))
+import pandas as pd
+
+# Read the CSV file
+data = pd.read_csv("your_file.csv")
+
+# Filter rows where 'product type' starts with 'bond' and 'asset type' is 'security'
+filtered_data = data[(data['product type'].str.startswith("bond")) & (data['asset type'] == "security")]
+
+# Display the filtered data
+print(filtered_data)
