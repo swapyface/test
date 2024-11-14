@@ -19,3 +19,19 @@ Best regards,
 [Your Name]
 
 This reply gives them a clear overview of your approach while highlighting key model decisions and flexibility for application in different contexts. Let me know if you’d like any additional details.
+
+import pandas as pd
+
+# Sample data
+data = {'Value': [10, 45, 55, 75, 100, 20, 60, 85]}
+df = pd.DataFrame(data)
+
+# Define bins and labels
+bins = [0, 50, 100]
+labels = [1, 2]
+
+# Apply pd.cut to categorize values
+df['Category'] = pd.cut(df['Value'], bins=bins, labels=labels, right=True)
+
+print(df)
+
