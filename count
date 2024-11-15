@@ -1,57 +1,48 @@
-import pandas as pd
+from sklearn.ensemble import IsolationForest
 
-# Sample DataFrame with datetime columns
-df = pd.DataFrame({
-    'reval': ['2024-01-01', '2024-05-15', '2024-10-01'],
-    'maturity': ['2025-01-01', '2024-04-15', '2025-03-01']
-})
+# Example dataset sizes
+dataset_sizes = [1000, 5000, 15000, 50000, 150000, 300000]
 
-# Convert columns to datetime
-df['reval'] = pd.to_datetime(df['reval'])
-df['maturity'] = pd.to_datetime(df['maturity'])
+# Function to determine parameters based on dataset size
+def get_iso_params(dataset_size):
+    if 1000 <= dataset_size <= 10000:
+        return {
+            "n_estimators": 50 if dataset_size < 5000 else 75,
+            "max_samples": 64 if dataset_size < 5000 else 128,
+            "contamination": 0.02,
+            "max_features": 1.0,
+        }
+    elif 10000 < dataset_size <= 100000:
+        return {
+            "n_estimators": 100,
+            "max_samples": 256,
+            "contamination": 0.02,
+            "max_features": 1.0,
+        }
+    elif 100000 < dataset_size <= 300000:
+        return {
+            "n_estimators": 200,
+            "max_samples": 512,
+            "contamination": 0.02,
+            "max_features": 1.0,
+        }
+    else:
+        raise ValueError("Dataset size out of supported range.")
 
-# Calculate the remaining months
-df['months_remaining'] = (df['maturity'].dt.year - df['reval'].dt.year) * 12 + (df['maturity'].dt.month - df['reval'].dt.month)
+# Loop to create models for each dataset size
+models = {}
+for size in dataset_sizes:
+    params = get_iso_params(size)
+    iso_model = IsolationForest(
+        n_estimators=params["n_estimators"],
+        max_samples=params["max_samples"],
+        contamination=params["contamination"],
+        max_features=params["max_features"],
+        random_state=42
+    )
+    models[size] = iso_model
+    print(f"Created Isolation Forest model for dataset size {size} with parameters: {params}")
 
-# Drop rows where 'months_remaining' is negative
-df = df[df['months_remaining'] >= 0]
-
-print(df)
-
-# class_b.py
-class B:
-    def function_1(self, x, y):
-        # Perform some calculation
-        result = x + y
-        print(f"In function_1 of Class B, calculated result: {result}")
-        
-        # Call function_2 with the calculated result as a parameter
-        self.function_2(result)
-
-    def function_2(self, result):
-        print(f"In function_2 of Class B, received result: {result}")
-        # Further processing with result
-        final_result = result * 2
-        print(f"Final result in function_2: {final_result
-
-
-# class_a.py
-from class_b import B  # Import Class B
-
-class A:
-    def __init__(self):
-        # Create an instance of Class B
-        self.b_instance = B()
-
-    def call_b_function_1(self, x, y):
-        print("Calling function_1 of Class B from Class A")
-        # Call function_1 of Class B with parameters x and y
-        self.b_instance.function_1(x, y)
-
-
-# main.py
-from class_a import A  # Import Class A
-
-# Instantiate Class A and call the method
-a_instance = A()
-a_instance.call_b_function_1(5, 10)
+# Example: Fitting the model for a specific dataset
+# Assuming `data` is your preprocessed dataset
+# models[10000].fit(data)
