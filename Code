@@ -1,16 +1,9 @@
-# Separate normal data and anomalies
-normal = df[df['Anomaly_Score'] == 1]
-anomalies = df[df['Anomaly_Score'] == -1]
-
-# Plotting
-plt.figure(figsize=(10, 6))
-# Plot normal points
-plt.scatter(normal['Feature_1'], normal['Feature_2'], c='blue', label='Normal Data', alpha=0.6)
-# Plot outliers
-plt.scatter(anomalies['Feature_1'], anomalies['Feature_2'], c='red', label='Anomalies', alpha=0.8)
-plt.title('Normal Data vs. Outliers')
-plt.xlabel('Feature 1')
-plt.ylabel('Feature 2')
-plt.legend()
-plt.grid(True)
-plt.show()
+data[['IsOutlier', 'Comment']] = data.apply(
+    lambda row: (
+        ('Exclude', 'Maturity date is less than 0') if row['Maturity'] < 0 else
+        ('Exclude', 'Contains WR or NR') if any(val in ['WR', 'NR'] for val in row[cat_columns]) else
+        ('Exclude', 'BreakEvenSpread less than 5 or greater than 10,000') if (row['BreakEvenSpread'] < 5 or row['BreakEvenSpread'] > 10000) else
+        ('Include', '')
+    ),
+    axis=1
+).apply(pd.Series)
