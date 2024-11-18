@@ -1,9 +1,48 @@
-data[['IsOutlier', 'Comment']] = data.apply(
-    lambda row: (
-        ('Exclude', 'Maturity date is less than 0') if row['Maturity'] < 0 else
-        ('Exclude', 'Contains WR or NR') if any(val in ['WR', 'NR'] for val in row[cat_columns]) else
-        ('Exclude', 'BreakEvenSpread less than 5 or greater than 10,000') if (row['BreakEvenSpread'] < 5 or row['BreakEvenSpread'] > 10000) else
-        ('Include', '')
-    ),
-    axis=1
-).apply(pd.Series)
+from sklearn.ensemble import IsolationForest
+
+# Example dataset sizes
+dataset_sizes = [1000, 5000, 15000, 50000, 150000, 300000]
+
+# Function to determine parameters based on dataset size
+def get_iso_params(dataset_size):
+    if 1000 <= dataset_size <= 10000:
+        return {
+            "n_estimators": 50 if dataset_size < 5000 else 75,
+            "max_samples": 64 if dataset_size < 5000 else 128,
+            "contamination": 0.02,
+            "max_features": 1.0,
+        }
+    elif 10000 < dataset_size <= 100000:
+        return {
+            "n_estimators": 100,
+            "max_samples": 256,
+            "contamination": 0.02,
+            "max_features": 1.0,
+        }
+    elif 100000 < dataset_size <= 300000:
+        return {
+            "n_estimators": 200,
+            "max_samples": 512,
+            "contamination": 0.02,
+            "max_features": 1.0,
+        }
+    else:
+        raise ValueError("Dataset size out of supported range.")
+
+# Loop to create models for each dataset size
+models = {}
+for size in dataset_sizes:
+    params = get_iso_params(size)
+    iso_model = IsolationForest(
+        n_estimators=params["n_estimators"],
+        max_samples=params["max_samples"],
+        contamination=params["contamination"],
+        max_features=params["max_features"],
+        random_state=42
+    )
+    models[size] = iso_model
+    print(f"Created Isolation Forest model for dataset size {size} with parameters: {params}")
+
+# Example: Fitting the model for a specific dataset
+# Assuming `data` is your preprocessed dataset
+# models[10000].fit(data)
