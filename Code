@@ -1,1 +1,18 @@
-df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+import pandas as pd
+
+# Create a DataFrame
+df = pd.DataFrame({'col1': [1, 2, 3], 'category_col': ['A', 'B', 'C']})
+df['category_col'] = df['category_col'].astype('category')
+
+# Error occurs if you try to assign an undefined category
+try:
+    df.loc[0, 'category_col'] = 'D'  # Error: Can't setup the new category
+except Exception as e:
+    print(f"Error: {e}")
+
+# Fix: Set allowed categories first
+df['category_col'].cat.set_categories(['A', 'B', 'C', 'D'], inplace=True)
+
+# Now you can assign 'D'
+df.loc[0, 'category_col'] = 'D'
+print(df)
