@@ -6,22 +6,16 @@ data = {
 }
 df = pd.DataFrame(data)
 
-# Attempt conversion and capture errors
-def identify_invalid_dates(column):
-    invalid_records = []
-    for index, value in column.items():
-        try:
-            pd.to_datetime(value)
-        except Exception as e:
-            invalid_records.append((index, value, str(e)))
-    return invalid_records
+# Initialize an empty list to store problematic records
+invalid_records = []
 
-# Check invalid records
-invalid_records = identify_invalid_dates(df['date_column'])
+# Check each value in the column
+for index, value in df['date_column'].items():
+    try:
+        pd.to_datetime(value)  # Try converting to datetime
+    except Exception as e:
+        invalid_records.append((index, value, str(e)))  # Store index, value, and error message
 
 # Display invalid records
-if invalid_records:
-    for record in invalid_records:
-        print(f"Index: {record[0]}, Value: {record[1]}, Error: {record[2]}")
-else:
-    print("No invalid records found.")
+for record in invalid_records:
+    print(f"Index: {record[0]}, Value: {record[1]}, Error: {record[2]}")
