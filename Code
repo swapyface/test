@@ -1,14 +1,19 @@
 import pandas as pd
 import numpy as np
 
-# Example DataFrame
-data = {'categories_column': ['A', 'B', None, 'C', '']}
+# Sample DataFrame
+data = {
+    'numerical_column': [3, 7, np.nan, 8],
+    'categorical_column': ['known', 'unknown', '', 'known'],
+    'comment': ['', '', '', '']
+}
 df = pd.DataFrame(data)
 
-# Replace empty strings or other placeholders with NaN
-df['categories_column'].replace(['', 'unknown'], np.nan, inplace=True)
-
-# Drop rows with NaN
-df = df.dropna(subset=['categories_column'])
+# Apply the conditions and update the 'comment' column
+df['comment'] = df.apply(
+    lambda row: 'Check values' if (pd.isna(row['numerical_column']) or row['numerical_column'] < 5) 
+                and (row['categorical_column'] in ['unknown', '']) else row['comment'], 
+    axis=1
+)
 
 print(df)
