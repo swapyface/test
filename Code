@@ -1,19 +1,27 @@
 import pandas as pd
-import numpy as np
 
 # Sample DataFrame
 data = {
-    'numerical_column': [3, 7, np.nan, 8],
-    'categorical_column': ['known', 'unknown', '', 'known'],
-    'comment': ['', '', '', '']
+    'date_column': ['2024-11-01', '2024-11-02', 'invalid_date', None, '2024-11-05']
 }
 df = pd.DataFrame(data)
 
-# Apply the conditions and update the 'comment' column
-df['comment'] = df.apply(
-    lambda row: 'Check values' if (pd.isna(row['numerical_column']) or row['numerical_column'] < 5) 
-                and (row['categorical_column'] in ['unknown', '']) else row['comment'], 
-    axis=1
-)
+# Attempt conversion and capture errors
+def identify_invalid_dates(column):
+    invalid_records = []
+    for index, value in column.items():
+        try:
+            pd.to_datetime(value)
+        except Exception as e:
+            invalid_records.append((index, value, str(e)))
+    return invalid_records
 
-print(df)
+# Check invalid records
+invalid_records = identify_invalid_dates(df['date_column'])
+
+# Display invalid records
+if invalid_records:
+    for record in invalid_records:
+        print(f"Index: {record[0]}, Value: {record[1]}, Error: {record[2]}")
+else:
+    print("No invalid records found.")
