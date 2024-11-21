@@ -1,26 +1,66 @@
 import pandas as pd
+from sklearn.ensemble import IsolationForest
+from concurrent.futures import ProcessPoolExecutor
 
-# Input list
-columns_with_types = ["rating = string", "id = int"]
+# Function to train the model and get results for a single rating
+def process_rating_data(rating, data, params_func):
+    # Filter data for the current rating
+    rating_data = data[data['Rating'] == rating].copy()
+    
+    # Get model parameters based on the length of the data
+    rating_data_length = len(rating_data)
+    params = params_func(rating_data_length)
+    
+    # Initialize and train the Isolation Forest model
+    iso_model = IsolationForest(
+        n_estimators=params["n_estimators"],
+        max_samples=params["max_samples"],
+        contamination=params["contamination"],
+        max_features=params["max_features"],
+        random_state=42
+    )
+    
+    # Fit the model and predict anomalies
+    rating_data['anomaly_score'] = iso_model.fit_predict(rating_data)
+    return rating_data
 
-# Parse the list to extract column names and data types
-parsed_columns = [item.split(" = ") for item in columns_with_types]
-columns_with_types_dict = {col[0]: col[1] for col in parsed_columns}
+# Main function to run models in parallel
+def run_models_in_parallel(data, params_func):
+    # List of unique ratings
+    unique_ratings = data['Rating'].unique()
+    
+    # Results storage
+    all_results = []
 
-# Create an empty DataFrame with the specified columns
-df = pd.DataFrame(columns=columns_with_types_dict.keys())
+    # Run models in parallel
+    with ProcessPoolExecutor() as executor:
+        # Submit tasks for each rating
+        futures = {
+            executor.submit(process_rating_data, rating, data, params_func): rating
+            for rating in unique_ratings
+        }
+        
+        for future in futures:
+            try:
+                # Collect results
+                result = future.result()
+                all_results.append(result)
+            except Exception as e:
+                print(f"Error processing rating {futures[future]}: {e}")
+    
+    # Combine all results into a single DataFrame
+    final_data = pd.concat(all_results, ignore_index=True)
+    return final_data
 
-# Assign data types to the columns
-for col, dtype in columns_with_types_dict.items():
-    # Map string-based data types to pandas/numpy dtypes
-    dtype_mapping = {
-        "string": "string",
-        "int": "int64",
-        "float": "float64",
-        "bool": "bool"
+# Example usage
+def get_params(data_length):
+    """Dynamically adjust parameters based on data length."""
+    return {
+        "n_estimators": 100 if data_length < 1000 else 200,
+        "max_samples": min(256, data_length),
+        "contamination": 0.05,
+        "max_features": 1.0
     }
-    df[col] = df[col].astype(dtype_mapping.get(dtype, "object"))
 
-# Print the DataFrame and its data types
-print(df)
-print(df.dtypes)
+# Assuming 'data' is your dataset
+final_result = run_models_in_parallel(data, get_params)
