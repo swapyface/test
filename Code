@@ -1,16 +1,39 @@
-# Configure logging
-logging.basicConfig(
-    filename="program_execution.log",  # Logs saved to a file
-    level=logging.INFO,                # Log INFO and above levels
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+def process_rating(rating, data, numerical_col, categorical_col):
+    # The logic to process each rating
+    try:
+        print(f"Processing Rating: {rating}")
+        rating_data = data[data['Rating'] == rating]
+        params = get_iso_params(len(rating_data))
+        iso_model = IsolationForest(
+            n_estimators=params["n_estimators"],
+            max_samples=params["max_samples"],
+            contamination=params["contamination"],
+            random_state=42
+        )
+        X = encoded_data(rating_data, numerical_col, categorical_col)
+        rating_data['IsOutlier'] = iso_model.fit_predict(X)
+        rating_data['IsOutlier'] = rating_data['IsOutlier'].replace({-1: "outlier", 1: "inlier"})
+        return rating_data
+    except Exception as e:
+        print(f"Error processing Rating {rating}: {e}")
+        return pd.DataFrame()  # Return an empty DataFrame on error
 
-logging.info("Starting the program...")
-logging.info(f"Processing {len(unique_ratings)} unique ratings...")
+# Call this function in run_models_in_parallel
+def run_models_in_parallel(data, numerical_col, categorical_col, flagged_data):
+    unique_ratings = data['Rating'].unique()
+    outliers = pd.DataFrame()
 
-for Rating in unique_ratings:
-    logging.info(f"Processing Rating: {Rating}")
-    # Rest of the logic
-    logging.info(f"Finished processing Rating: {Rating}")
+    with ProcessPoolExecutor() as executor:
+        futures = {
+            executor.submit(process_rating, rating, data, numerical_col, categorical_col): rating
+            for rating in unique_ratings
+        }
 
-logging.info("Program completed successfully!")
+        for future in tqdm(futures, desc="Processing Ratings"):
+            try:
+                result = future.result()
+                outliers = pd.concat([outliers, result], ignore_index=True)
+            except Exception as e:
+                print(f"Error processing rating {futures[future]}: {e}")
+
+    return outliers
