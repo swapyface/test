@@ -1,66 +1,104 @@
 import pandas as pd
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.ensemble import IsolationForest
 from concurrent.futures import ProcessPoolExecutor
 
-# Function to train the model and get results for a single rating
-def process_rating_data(rating, data, params_func):
+# Preprocessing function
+def encoded_data(rating_data, numerical_col, categorical_col):
+    """
+    Scales numerical data and encodes categorical data.
+    """
+    # Scale numerical data
+    scaler = MinMaxScaler()
+    scaled_data = scaler.fit_transform(rating_data[numerical_col])
+    
+    # Encode categorical data
+    encoder = OneHotEncoder(sparse=False, drop="first")
+    encoded_categorical = encoder.fit_transform(rating_data[categorical_col])
+    
+    # Combine scaled and encoded data
+    X = np.hstack((encoded_categorical, scaled_data))
+    return X
+
+# Function to determine Isolation Forest parameters
+def get_iso_params(dataset_size):
+    if dataset_size < 1000:
+        return {"n_estimators": 3, "max_samples": 2, "contamination": 0.1}
+    elif 1000 <= dataset_size < 10000:
+        return {"n_estimators": 50, "max_samples": 64, "contamination": 0.05}
+    elif 10000 <= dataset_size < 50000:
+        return {"n_estimators": 100, "max_samples": 256, "contamination": 0.05}
+    else:
+        return {"n_estimators": 300, "max_samples": 1024, "contamination": 0.05}
+
+# Function to process data for a single rating
+def process_rating(rating, data, numerical_col, categorical_col):
+    """
+    Processes the data for a single rating by training an Isolation Forest model
+    and predicting anomalies.
+    """
     # Filter data for the current rating
     rating_data = data[data['Rating'] == rating].copy()
-    
-    # Get model parameters based on the length of the data
     rating_data_length = len(rating_data)
-    params = params_func(rating_data_length)
     
-    # Initialize and train the Isolation Forest model
+    # Get Isolation Forest parameters
+    params = get_iso_params(rating_data_length)
+    
+    # Preprocess data
+    X = encoded_data(rating_data, numerical_col, categorical_col)
+    
+    # Train Isolation Forest
     iso_model = IsolationForest(
         n_estimators=params["n_estimators"],
         max_samples=params["max_samples"],
         contamination=params["contamination"],
-        max_features=params["max_features"],
         random_state=42
     )
-    
-    # Fit the model and predict anomalies
-    rating_data['anomaly_score'] = iso_model.fit_predict(rating_data)
+    # Predict anomalies
+    rating_data['IsOutlier'] = iso_model.fit_predict(X)
+    # Map -1 to "outlier" and 1 to "inlier"
+    rating_data['IsOutlier'] = rating_data['IsOutlier'].replace({-1: "outlier", 1: "inlier"})
     return rating_data
 
 # Main function to run models in parallel
-def run_models_in_parallel(data, params_func):
-    # List of unique ratings
+def run_models_in_parallel(data, numerical_col, categorical_col, flagged_data):
+    """
+    Runs Isolation Forest models for each rating in parallel and combines results.
+    """
     unique_ratings = data['Rating'].unique()
-    
-    # Results storage
-    all_results = []
+    outliers = pd.DataFrame()
 
-    # Run models in parallel
+    # Parallel processing
     with ProcessPoolExecutor() as executor:
-        # Submit tasks for each rating
         futures = {
-            executor.submit(process_rating_data, rating, data, params_func): rating
+            executor.submit(process_rating, rating, data, numerical_col, categorical_col): rating
             for rating in unique_ratings
         }
         
         for future in futures:
             try:
-                # Collect results
                 result = future.result()
-                all_results.append(result)
+                outliers = pd.concat([outliers, result], ignore_index=True)
             except Exception as e:
                 print(f"Error processing rating {futures[future]}: {e}")
     
-    # Combine all results into a single DataFrame
-    final_data = pd.concat(all_results, ignore_index=True)
-    return final_data
+    # Combine with flagged data
+    final_result = pd.concat([outliers, flagged_data], ignore_index=True)
+    # Remove unnecessary columns (e.g., unnamed)
+    final_result = final_result.loc[:, ~final_result.columns.str.contains('^Unnamed')]
+    return final_result
 
 # Example usage
-def get_params(data_length):
-    """Dynamically adjust parameters based on data length."""
-    return {
-        "n_estimators": 100 if data_length < 1000 else 200,
-        "max_samples": min(256, data_length),
-        "contamination": 0.05,
-        "max_features": 1.0
-    }
-
-# Assuming 'data' is your dataset
-final_result = run_models_in_parallel(data, get_params)
+if __name__ == "__main__":
+    # Replace these with your actual data
+    non_flagged_data = pd.DataFrame()  # Your dataset
+    flagged_data = pd.DataFrame()  # Your flagged dataset
+    categorical_col = ["IndustryLevel2", "RegionOfDomicile", "Subordination"]
+    numerical_col = ["BreakEvenSpread"]
+    
+    # Run models in parallel
+    final_result = run_models_in_parallel(non_flagged_data, numerical_col, categorical_col, flagged_data)
+    
+    # Save or display results
+    final_result.to_csv("final_result.csv", index=False)
+    print("Final result saved to 'final_result.csv'")
