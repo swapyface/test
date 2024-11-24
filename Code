@@ -1,29 +1,16 @@
-import logging
-
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    filename="program_execution.log",  # Logs saved to a file
+    level=logging.INFO,                # Log INFO and above levels
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
-# Example logging in the code
-def process_rating(rating, data, numerical_col, categorical_col):
-    logging.info(f"Processing Rating: {rating}")
-    rating_data = data[data['Rating'] == rating].copy()
-    logging.info(f"Data size for Rating {rating}: {len(rating_data)}")
+logging.info("Starting the program...")
+logging.info(f"Processing {len(unique_ratings)} unique ratings...")
 
-    # Remaining processing...
-    try:
-        X = encoded_data(rating_data, numerical_col, categorical_col)
-        params = get_iso_params(len(rating_data))
-        iso_model = IsolationForest(
-            n_estimators=params["n_estimators"],
-            max_samples=params["max_samples"],
-            contamination=params["contamination"],
-            random_state=42
-        )
-        rating_data['IsOutlier'] = iso_model.fit_predict(X)
-        logging.info(f"Model trained successfully for Rating {rating}.")
-    except Exception as e:
-        logging.error(f"Error processing Rating {rating}: {e}")
-    return rating_data
+for Rating in unique_ratings:
+    logging.info(f"Processing Rating: {Rating}")
+    # Rest of the logic
+    logging.info(f"Finished processing Rating: {Rating}")
+
+logging.info("Program completed successfully!")
