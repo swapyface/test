@@ -1,24 +1,29 @@
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+for i, feature in enumerate(categorical_features, 1):
+    plt.subplot(2, len(categorical_features)//2 + 1, i)  # Adjust number of rows/columns
+    sns.countplot(x=feature, hue="anomaly_score", data=df, palette="coolwarm")
+    plt.title(f'Distribution of {feature} by Anomaly Status')
 
-# Load your CSV file
-# Replace 'your_file.csv' with the actual path to your CSV
-df = pd.read_csv('your_file.csv')
+plt.tight_layout()
+plt.show()
 
-# Convert "inlier" and "outlier" to numerical values
-# "inlier" = 0, "outlier" = 1 (or you can switch these if preferred)
-df['anomaly_score'] = df['ISOutlier'].apply(lambda x: 1 if x == 'outlier' else 0)
+# Plot Numerical Feature Distributions (Histograms)
+plt.figure(figsize=(15, 10))
 
-# Select the columns you want to include in the heatmap (excluding the target variable 'ISOutlier')
-# Here we assume you want to analyze the correlation between features and the anomaly score
-features = df.drop(columns=['ISOutlier', 'anomaly_score'])  # Drop the 'ISOutlier' column and the 'anomaly_score' column
+for i, feature in enumerate(numerical_features, 1):
+    plt.subplot(2, len(numerical_features)//2 + 1, i)  # Adjust number of rows/columns
+    sns.histplot(data=df, x=feature, hue="anomaly_score", multiple="stack", kde=True, bins=20, palette="coolwarm")
+    plt.title(f'Distribution of {feature} by Anomaly Status')
 
-# Add the 'anomaly_score' to the features DataFrame for the heatmap
-features['anomaly_score'] = df['anomaly_score']
+plt.tight_layout()
+plt.show()
 
-# Generate a heatmap of correlation between features and anomaly score
-plt.figure(figsize=(10, 6))
-sns.heatmap(features.corr(), annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
-plt.title('Correlation Heatmap of Features and Anomaly Scores')
+# Alternatively, Boxplot for Numerical Feature Comparison
+plt.figure(figsize=(15, 10))
+
+for i, feature in enumerate(numerical_features, 1):
+    plt.subplot(2, len(numerical_features)//2 + 1, i)  # Adjust number of rows/columns
+    sns.boxplot(x="anomaly_score", y=feature, data=df, palette="coolwarm")
+    plt.title(f'{feature} by Anomaly Status')
+
+plt.tight_layout()
 plt.show()
