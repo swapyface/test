@@ -1,29 +1,9 @@
-for i, feature in enumerate(categorical_features, 1):
-    plt.subplot(2, len(categorical_features)//2 + 1, i)  # Adjust number of rows/columns
-    sns.countplot(x=feature, hue="anomaly_score", data=df, palette="coolwarm")
-    plt.title(f'Distribution of {feature} by Anomaly Status')
+# Check for spaces in column name
+print(df.columns)
 
-plt.tight_layout()
-plt.show()
+# Strip any leading/trailing whitespace in the column name
+df.rename(columns=lambda x: x.strip(), inplace=True)
 
-# Plot Numerical Feature Distributions (Histograms)
-plt.figure(figsize=(15, 10))
-
-for i, feature in enumerate(numerical_features, 1):
-    plt.subplot(2, len(numerical_features)//2 + 1, i)  # Adjust number of rows/columns
-    sns.histplot(data=df, x=feature, hue="anomaly_score", multiple="stack", kde=True, bins=20, palette="coolwarm")
-    plt.title(f'Distribution of {feature} by Anomaly Status')
-
-plt.tight_layout()
-plt.show()
-
-# Alternatively, Boxplot for Numerical Feature Comparison
-plt.figure(figsize=(15, 10))
-
-for i, feature in enumerate(numerical_features, 1):
-    plt.subplot(2, len(numerical_features)//2 + 1, i)  # Adjust number of rows/columns
-    sns.boxplot(x="anomaly_score", y=feature, data=df, palette="coolwarm")
-    plt.title(f'{feature} by Anomaly Status')
-
-plt.tight_layout()
-plt.show()
+# Check for spaces in date values
+print(df['MaturityDate'].str.strip())
+df['MaturityDate'] = df['MaturityDate'].str.strip()
