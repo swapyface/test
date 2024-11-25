@@ -1,1 +1,5 @@
-df['MaturityDate'] = df['MaturityDate'].clip(upper=pd.Timestamp('2262-04-11'))
+df['MaturityDate'].fillna('1970-01-01', inplace=True)
+df['MaturityDate'] = pd.to_datetime(df['MaturityDate'])
+
+
+default_date_rows = df[df['MaturityDate'] == '1970-01-01']
