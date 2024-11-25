@@ -1,9 +1,1 @@
-# Check for spaces in column name
-print(df.columns)
-
-# Strip any leading/trailing whitespace in the column name
-df.rename(columns=lambda x: x.strip(), inplace=True)
-
-# Check for spaces in date values
-print(df['MaturityDate'].str.strip())
-df['MaturityDate'] = df['MaturityDate'].str.strip()
+df['MaturityDate'] = pd.to_datetime(df['MaturityDate'], format='%Y-%m-%d', errors='raise')
