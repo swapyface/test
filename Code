@@ -1,32 +1,33 @@
-sns.kdeplot(data['price'], color='green', fill=True)
-plt.title('Density Plot for Price')
-plt.xlabel('Price')
-plt.ylabel('Density')
-plt.show()
-
-
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 import numpy as np
 
-# Apply log transformation
-data['log_price'] = np.log1p(data['price'])  # log(1 + x) to avoid log(0)
+# Example dataset (replace with your actual data)
+data = pd.DataFrame({
+    'price': np.random.lognormal(mean=2, sigma=0.8, size=100000)  # Skewed data
+})
 
-# Histogram for log-transformed data
-sns.histplot(data['log_price'], kde=True, bins=50, color='orange')
-plt.title('Log-Transformed Price Distribution')
-plt.xlabel('Log(Price)')
+# Calculate mean and standard deviation
+mean = data['price'].mean()
+std_dev = data['price'].std()
+
+# Plot histogram
+plt.figure(figsize=(10, 6))
+sns.histplot(data['price'], bins=50, kde=True, color='blue', alpha=0.6)
+
+# Add vertical lines for mean and standard deviations
+plt.axvline(mean, color='red', linestyle='--', linewidth=1.5, label=f'Mean: {mean:.2f}')
+plt.axvline(mean + std_dev, color='green', linestyle='--', linewidth=1.5, label=f'+1 Std Dev: {mean + std_dev:.2f}')
+plt.axvline(mean - std_dev, color='green', linestyle='--', linewidth=1.5, label=f'-1 Std Dev: {mean - std_dev:.2f}')
+
+# Optional: Add 2nd standard deviation
+plt.axvline(mean + 2 * std_dev, color='orange', linestyle='--', linewidth=1.5, label=f'+2 Std Dev: {mean + 2 * std_dev:.2f}')
+plt.axvline(mean - 2 * std_dev, color='orange', linestyle='--', linewidth=1.5, label=f'-2 Std Dev: {mean - 2 * std_dev:.2f}')
+
+# Labels and legend
+plt.title('Histogram with Mean and Standard Deviation')
+plt.xlabel('Price')
 plt.ylabel('Frequency')
+plt.legend()
 plt.show()
-
-
-sns.boxplot(x='rating', y='price', data=data)
-plt.title('Box Plot of Price by Rating')
-plt.xlabel('Rating')
-plt.ylabel('Price')
-plt.show()
-
-
-import plotly.express as px
-
-fig = px.histogram(data, x='price', nbins=50, title='Price Distribution')
-fig.update_layout(xaxis_title='Price', yaxis_title='Frequency')
-fig.show()
