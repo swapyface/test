@@ -1,41 +1,16 @@
 import pandas as pd
-import numpy as np
-from scipy.stats import zscore
 
-# Sample dataset
+# Sample dataset (replace with your dataset)
 data = {
-    'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C'],
-    'price': [100, 200, 150, 300, 400, 350, 250, 46, 500]
+    'result': ['inlier', 'outlier', 'inlier', 'inlier', 'outlier', 'inlier', 'outlier', 'inlier', 'outlier', 'inlier'],
+    'ticker': ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'C', 'C', 'C'],
+    'rating': ['AA', 'AA', 'A', 'A', 'AA', 'AA', 'A', 'A', 'AA', 'A']
 }
+
 df = pd.DataFrame(data)
 
-# Function to calculate Z-score, IQR, and classify inliers/outliers
-def classify_outliers_with_iqr_and_zscore(group, column):
-    # Calculate Z-score
-    group['zscore'] = zscore(group[column])
-    group['Zscore-result'] = np.where(group['zscore'].abs() > 2, 'outlier', 'inlier')
-    
-    # Calculate Q1, Q3, and IQR
-    Q1 = group[column].quantile(0.25)
-    Q3 = group[column].quantile(0.75)
-    IQR = Q3 - Q1
-    lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-    
-    # Classify based on IQR
-    group['IQR-result'] = np.where((group[column] < lower_bound) | (group[column] > upper_bound), 'outlier', 'inlier')
-    
-    # Assign Q1, Q3, and IQR as new columns
-    group['Q1'] = Q1
-    group['Q3'] = Q3
-    group['IQR'] = IQR
-    
-    return group
+# Count the occurrences of inliers and outliers for each ticker and rating
+outlier_count = df.groupby(['ticker', 'rating', 'result']).size().unstack(fill_value=0)
 
-# Apply the function group-wise
-df = df.groupby('rating').apply(classify_outliers_with_iqr_and_zscore, column='price')
-
-# Drop the temporary zscore column if not needed
-df.drop(columns=['zscore'], inplace=True)
-
-print(df)
+# Display the result
+print(outlier_count)
