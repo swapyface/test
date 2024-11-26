@@ -8,25 +8,23 @@ data = pd.DataFrame({
     'price': np.random.lognormal(mean=2, sigma=0.8, size=100000)  # Skewed data
 })
 
-# Calculate mean and standard deviation
+# Calculate Z-scores
 mean = data['price'].mean()
 std_dev = data['price'].std()
+data['z_score'] = (data['price'] - mean) / std_dev
 
 # Plot histogram
 plt.figure(figsize=(10, 6))
 sns.histplot(data['price'], bins=50, kde=True, color='blue', alpha=0.6)
 
-# Add vertical lines for mean and standard deviations
-plt.axvline(mean, color='red', linestyle='--', linewidth=1.5, label=f'Mean: {mean:.2f}')
-plt.axvline(mean + std_dev, color='green', linestyle='--', linewidth=1.5, label=f'+1 Std Dev: {mean + std_dev:.2f}')
-plt.axvline(mean - std_dev, color='green', linestyle='--', linewidth=1.5, label=f'-1 Std Dev: {mean - std_dev:.2f}')
-
-# Optional: Add 2nd standard deviation
-plt.axvline(mean + 2 * std_dev, color='orange', linestyle='--', linewidth=1.5, label=f'+2 Std Dev: {mean + 2 * std_dev:.2f}')
-plt.axvline(mean - 2 * std_dev, color='orange', linestyle='--', linewidth=1.5, label=f'-2 Std Dev: {mean - 2 * std_dev:.2f}')
+# Add vertical lines for Z-scores (±1, ±2, ±3)
+for z in [-3, -2, -1, 0, 1, 2, 3]:
+    z_value = mean + z * std_dev  # Convert Z-score back to raw value
+    label = f"Z={z}" if z != 0 else "Mean (Z=0)"
+    plt.axvline(z_value, color='green' if z != 0 else 'red', linestyle='--', linewidth=1.5, label=label)
 
 # Labels and legend
-plt.title('Histogram with Mean and Standard Deviation')
+plt.title('Histogram with Z-scores')
 plt.xlabel('Price')
 plt.ylabel('Frequency')
 plt.legend()
