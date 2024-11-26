@@ -5,12 +5,12 @@ from scipy.stats import zscore
 # Sample dataset
 data = {
     'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C'],
-    'price': [100, 200, 150, 300, 400, 350, 250, 100, 500]
+    'price': [100, 200, 150, 300, 400, 350, 250, 46, 500]
 }
 df = pd.DataFrame(data)
 
 # Function to calculate Z-score, IQR, and classify inliers/outliers
-def classify_outliers_with_iqr(group, column):
+def classify_outliers_with_iqr_and_zscore(group, column):
     # Calculate Z-score
     group['zscore'] = zscore(group[column])
     group['Zscore-result'] = np.where(group['zscore'].abs() > 2, 'outlier', 'inlier')
@@ -19,6 +19,11 @@ def classify_outliers_with_iqr(group, column):
     Q1 = group[column].quantile(0.25)
     Q3 = group[column].quantile(0.75)
     IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    
+    # Classify based on IQR
+    group['IQR-result'] = np.where((group[column] < lower_bound) | (group[column] > upper_bound), 'outlier', 'inlier')
     
     # Assign Q1, Q3, and IQR as new columns
     group['Q1'] = Q1
@@ -28,7 +33,7 @@ def classify_outliers_with_iqr(group, column):
     return group
 
 # Apply the function group-wise
-df = df.groupby('rating').apply(classify_outliers_with_iqr, column='price')
+df = df.groupby('rating').apply(classify_outliers_with_iqr_and_zscore, column='price')
 
 # Drop the temporary zscore column if not needed
 df.drop(columns=['zscore'], inplace=True)
