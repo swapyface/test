@@ -9,14 +9,26 @@ data = {
 }
 df = pd.DataFrame(data)
 
-# Function to calculate Z-score and classify inliers and outliers
-def classify_outliers(group, column):
+# Function to calculate Z-score, IQR, and classify inliers/outliers
+def classify_outliers_with_iqr(group, column):
+    # Calculate Z-score
     group['zscore'] = zscore(group[column])
     group['Zscore-result'] = np.where(group['zscore'].abs() > 2, 'outlier', 'inlier')
+    
+    # Calculate Q1, Q3, and IQR
+    Q1 = group[column].quantile(0.25)
+    Q3 = group[column].quantile(0.75)
+    IQR = Q3 - Q1
+    
+    # Assign Q1, Q3, and IQR as new columns
+    group['Q1'] = Q1
+    group['Q3'] = Q3
+    group['IQR'] = IQR
+    
     return group
 
 # Apply the function group-wise
-df = df.groupby('rating').apply(classify_outliers, column='price')
+df = df.groupby('rating').apply(classify_outliers_with_iqr, column='price')
 
 # Drop the temporary zscore column if not needed
 df.drop(columns=['zscore'], inplace=True)
