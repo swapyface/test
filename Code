@@ -1,30 +1,32 @@
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import skew
-
-# Example dataset
-# Assuming 'rating' is categorical and 'price' is numerical
-data = pd.DataFrame({
-    'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C', 'A'],
-    'price': [10, 15, 20, 25, 30, 35, 12, 22, 32, 18]
-})
-
-# Group by rating and calculate skewness
-skewness = data.groupby('rating')['price'].apply(lambda x: skew(x, bias=False))
-print("Skewness for each rating:\n", skewness)
-
-# Visualization
-unique_ratings = data['rating'].unique()
-fig, axes = plt.subplots(len(unique_ratings), 1, figsize=(8, len(unique_ratings) * 4))
-
-for i, rating in enumerate(unique_ratings):
-    subset = data[data['rating'] == rating]
-    sns.histplot(subset['price'], kde=True, ax=axes[i], color='blue')
-    axes[i].set_title(f"Distribution for Rating: {rating} (Skewness: {skewness[rating]:.2f})")
-    axes[i].set_xlabel('Price')
-    axes[i].set_ylabel('Frequency')
-
-plt.tight_layout()
+sns.kdeplot(data['price'], color='green', fill=True)
+plt.title('Density Plot for Price')
+plt.xlabel('Price')
+plt.ylabel('Density')
 plt.show()
+
+
+import numpy as np
+
+# Apply log transformation
+data['log_price'] = np.log1p(data['price'])  # log(1 + x) to avoid log(0)
+
+# Histogram for log-transformed data
+sns.histplot(data['log_price'], kde=True, bins=50, color='orange')
+plt.title('Log-Transformed Price Distribution')
+plt.xlabel('Log(Price)')
+plt.ylabel('Frequency')
+plt.show()
+
+
+sns.boxplot(x='rating', y='price', data=data)
+plt.title('Box Plot of Price by Rating')
+plt.xlabel('Rating')
+plt.ylabel('Price')
+plt.show()
+
+
+import plotly.express as px
+
+fig = px.histogram(data, x='price', nbins=50, title='Price Distribution')
+fig.update_layout(xaxis_title='Price', yaxis_title='Frequency')
+fig.show()
