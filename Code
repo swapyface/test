@@ -1,16 +1,30 @@
 import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import skew
 
-# Sample dataset (replace with your dataset)
-data = {
-    'result': ['inlier', 'outlier', 'inlier', 'inlier', 'outlier', 'inlier', 'outlier', 'inlier', 'outlier', 'inlier'],
-    'ticker': ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'C', 'C', 'C'],
-    'rating': ['AA', 'AA', 'A', 'A', 'AA', 'AA', 'A', 'A', 'AA', 'A']
-}
+# Example dataset
+# Assuming 'rating' is categorical and 'price' is numerical
+data = pd.DataFrame({
+    'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C', 'A'],
+    'price': [10, 15, 20, 25, 30, 35, 12, 22, 32, 18]
+})
 
-df = pd.DataFrame(data)
+# Group by rating and calculate skewness
+skewness = data.groupby('rating')['price'].apply(lambda x: skew(x, bias=False))
+print("Skewness for each rating:\n", skewness)
 
-# Count the occurrences of inliers and outliers for each ticker and rating
-outlier_count = df.groupby(['ticker', 'rating', 'result']).size().unstack(fill_value=0)
+# Visualization
+unique_ratings = data['rating'].unique()
+fig, axes = plt.subplots(len(unique_ratings), 1, figsize=(8, len(unique_ratings) * 4))
 
-# Display the result
-print(outlier_count)
+for i, rating in enumerate(unique_ratings):
+    subset = data[data['rating'] == rating]
+    sns.histplot(subset['price'], kde=True, ax=axes[i], color='blue')
+    axes[i].set_title(f"Distribution for Rating: {rating} (Skewness: {skewness[rating]:.2f})")
+    axes[i].set_xlabel('Price')
+    axes[i].set_ylabel('Frequency')
+
+plt.tight_layout()
+plt.show()
