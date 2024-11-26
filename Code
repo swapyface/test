@@ -1,65 +1,24 @@
-# File path: find_outliers_with_values_inplace.py
-
 import pandas as pd
+import numpy as np
+from scipy.stats import zscore
 
-def find_outliers_with_values_inplace(dataset, rating_col, score_col, std_threshold=2):
-    """
-    Identify outliers in the dataset for each rating based on z-score and 2 standard deviations,
-    and add the results directly into the same dataset with columns 'zscore-outlier' and 'outlier'.
+# Sample dataset
+data = {
+    'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C'],
+    'price': [100, 200, 150, 300, 400, 350, 250, 100, 500]
+}
+df = pd.DataFrame(data)
 
-    Parameters:
-        dataset (pd.DataFrame): The dataset containing ratings and scores.
-        rating_col (str): The name of the column containing ratings.
-        score_col (str): The name of the column containing scores.
-        std_threshold (float): Number of standard deviations to classify as an outlier.
+# Function to calculate Z-score and classify inliers and outliers
+def classify_outliers(group, column):
+    group['zscore'] = zscore(group[column])
+    group['Zscore-result'] = np.where(group['zscore'].abs() > 2, 'outlier', 'inlier')
+    return group
 
-    Returns:
-        pd.DataFrame: The updated dataset with 'zscore-outlier' and 'outlier' columns added.
-    """
-    # Add default values to new columns
-    dataset['zscore-outlier'] = 'inlier'  # Default to inlier
-    dataset['outlier'] = False            # Default to not an outlier
+# Apply the function group-wise
+df = df.groupby('rating').apply(classify_outliers, column='price')
 
-    # Group data by rating
-    grouped_data = dataset.groupby(rating_col)
+# Drop the temporary zscore column if not needed
+df.drop(columns=['zscore'], inplace=True)
 
-    for rating, group in grouped_data:
-        # Compute mean and standard deviation for the score column
-        mean = group[score_col].mean()
-        std = group[score_col].std()
-
-        if std == 0:
-            # Skip groups with no variation
-            continue
-
-        # Define bounds for 2-STD
-        lower_bound = mean - std_threshold * std
-        upper_bound = mean + std_threshold * std
-
-        # Compute z-scores
-        z_scores = (group[score_col] - mean) / std
-
-        # Update 'zscore-outlier' column with 'outlier' or 'inlier'
-        dataset.loc[group.index, 'zscore-outlier'] = ['outlier' if abs(z) > std_threshold else 'inlier' for z in z_scores]
-
-        # Update 'outlier' column (boolean)
-        dataset.loc[group.index, 'outlier'] = (group[score_col] < lower_bound) | (group[score_col] > upper_bound)
-
-    return dataset
-
-
-# Example usage
-if __name__ == "__main__":
-    # Example dataset
-    data = {
-        "rating": ["A", "A", "A", "B", "B", "B", "C", "C"],
-        "score": [10, 12, 10, 20, 22, 100, 30, 29]
-    }
-    df = pd.DataFrame(data)
-
-    # Find outliers and update the dataset in place
-    updated_df = find_outliers_with_values_inplace(df, rating_col="rating", score_col="score", std_threshold=2)
-    
-    # Display the updated dataset
-    print("Updated Dataset:")
-    print(updated_df)
+print(df)
