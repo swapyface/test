@@ -1,52 +1,30 @@
-Here are some points explaining why Isolation Forest (ISO) might be better than Z-score for outlier detection:
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import skew
 
-1. Multidimensional Data Handling
+# Example dataset
+# Assuming 'rating' is categorical and 'price' is numerical
+data = pd.DataFrame({
+    'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C', 'A'],
+    'price': [10, 15, 20, 25, 30, 35, 12, 22, 32, 18]
+})
 
-	•	Isolation Forest can naturally handle multidimensional data and detect outliers in complex feature spaces.
-	•	Z-score works well only with univariate data or requires additional preprocessing (like PCA) for high-dimensional data.
+# Group by rating and calculate skewness
+skewness = data.groupby('rating')['price'].apply(lambda x: skew(x, bias=False))
+print("Skewness for each rating:\n", skewness)
 
-2. Assumption of Distribution
+# Visualization
+unique_ratings = data['rating'].unique()
+fig, axes = plt.subplots(len(unique_ratings), 1, figsize=(8, len(unique_ratings) * 4))
 
-	•	Isolation Forest does not assume any specific data distribution. It is suitable for non-Gaussian or skewed data.
-	•	Z-score relies on the assumption of a normal distribution; it may fail if the data distribution is non-Gaussian.
+for i, rating in enumerate(unique_ratings):
+    subset = data[data['rating'] == rating]
+    sns.histplot(subset['price'], kde=True, ax=axes[i], color='blue')
+    axes[i].set_title(f"Distribution for Rating: {rating} (Skewness: {skewness[rating]:.2f})")
+    axes[i].set_xlabel('Price')
+    axes[i].set_ylabel('Frequency')
 
-3. Robustness to Scaling
-
-	•	Isolation Forest is less sensitive to feature scaling or units of measurement.
-	•	Z-score requires data to be standardized for accurate results, as it depends on the mean and standard deviation.
-
-4. Performance on Imbalanced Data
-
-	•	Isolation Forest performs well with imbalanced datasets because it isolates anomalies rather than relying on density or frequency.
-	•	Z-score may not effectively identify outliers if the data is imbalanced or contains clusters with varying densities.
-
-5. Detecting Non-linear Patterns
-
-	•	Isolation Forest can detect non-linear relationships and complex outliers in the data.
-	•	Z-score only identifies outliers based on linear deviation from the mean.
-
-6. Ability to Handle Categorical Variables
-
-	•	While Z-score is primarily limited to numerical variables, Isolation Forest can be adapted to include encoded categorical features.
-
-7. Scalability
-
-	•	Isolation Forest scales well with large datasets due to its tree-based structure and efficient algorithm.
-	•	Z-score involves computationally expensive calculations (mean and standard deviation) for very large datasets.
-
-8. Sensitivity to Extreme Outliers
-
-	•	Isolation Forest is better at isolating extreme and subtle outliers by design.
-	•	Z-score can flag too many data points as outliers if the data contains extreme values that inflate the standard deviation.
-
-9. Suitability for Anomalies in Time-Series
-
-	•	Isolation Forest can handle anomalies in sequential or time-series data by considering temporal dependencies (if features are engineered accordingly).
-	•	Z-score typically requires additional logic to work effectively for time-series anomalies.
-
-10. Ease of Hyperparameter Tuning
-
-	•	Isolation Forest provides hyperparameters (e.g., contamination ratio, number of trees) that can be tuned for specific datasets.
-	•	Z-score lacks flexibility and requires manual threshold setting (e.g., ±3 standard deviations) to detect anomalies.
-
-In summary, Isolation Forest is a more advanced and versatile method, especially for multidimensional, non-Gaussian, imbalanced, or large-scale datasets, while Z-score is simpler but limited to straightforward univariate, normally distributed cases.
+plt.tight_layout()
+plt.show()
