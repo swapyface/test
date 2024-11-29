@@ -1,73 +1,120 @@
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import numpy as np
+import os
 
-# Example dataset
-np.random.seed(42)
-data = pd.DataFrame({
-    'price': np.random.lognormal(mean=3, sigma=0.8, size=1000),
-    'rating': np.random.choice(['A', 'B', 'C', 'D'], size=1000),
-    'iso_result': np.random.choice([1, -1], size=1000, p=[0.9, 0.1])  # 90% inliers, 10% outliers
-})
+# Function to load data from a CSV file
+def load_data(file_path):
+    """
+    Load dataset from a CSV file.
+    Args:
+        file_path (str): Path to the CSV file.
+    Returns:
+        pd.DataFrame: Loaded DataFrame.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"The file {file_path} does not exist.")
+    data = pd.read_csv(file_path)
+    print("Data successfully loaded.")
+    return data
 
-# Define threshold for extreme outliers
-extreme_threshold = 100
+# Function to reduce memory usage
+def reduce_memory_usage(data):
+    """
+    Reduces memory usage of specified columns in a DataFrame by downcasting numerical types where possible.
+    Args:
+        data (pd.DataFrame): The DataFrame to optimize.
+    Returns:
+        pd.DataFrame: Memory-optimized DataFrame.
+    """
+    for col in data.columns:
+        col_type = data[col].dtype
+        if pd.api.types.is_numeric_dtype(col_type):
+            c_min = data[col].min()
+            c_max = data[col].max()
+            if pd.api.types.is_integer_dtype(data[col]):
+                if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
+                    data[col] = data[col].astype(np.int8)
+                elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                    data[col] = data[col].astype(np.int16)
+                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                    data[col] = data[col].astype(np.int32)
+                else:
+                    data[col] = data[col].astype(np.int64)
+            elif pd.api.types.is_float_dtype(data[col]):
+                data[col] = data[col].astype(np.float32)
+    print("Memory optimization completed.")
+    return data
 
-# Scatter plot with inliers and outliers
-plt.figure(figsize=(14, 8))
-
-# Inliers
-sns.scatterplot(
-    data=data[data['iso_result'] == 1],
-    x='rating',
-    y='price',
-    color='blue',
-    label='Inliers',
-    alpha=0.6
-)
-
-# Outliers
-sns.scatterplot(
-    data=data[data['iso_result'] == -1],
-    x='rating',
-    y='price',
-    color='red',
-    label='Outliers',
-    alpha=0.8
-)
-
-# Highlight extreme outliers (e.g., price > extreme_threshold)
-extreme_outliers = data[(data['iso_result'] == -1) & (data['price'] > extreme_threshold)]
-sns.scatterplot(
-    data=extreme_outliers,
-    x='rating',
-    y='price',
-    color='purple',
-    label='Extreme Outliers',
-    s=100,  # Larger marker size for emphasis
-    alpha=1.0
-)
-
-# Add labels for extreme outliers
-for i in extreme_outliers.index:
-    plt.text(
-        x=extreme_outliers['rating'][i],
-        y=extreme_outliers['price'][i],
-        s=f"{extreme_outliers['price'][i]:.2f}",
-        color='black',
-        fontsize=8,
-        ha='right'
+# Function to create new columns
+def create_new_columns(data):
+    """
+    Creates new columns in the DataFrame such as 'Time_to_maturity_month' and its bins.
+    Args:
+        data (pd.DataFrame): The input DataFrame.
+    Returns:
+        pd.DataFrame: DataFrame with new columns.
+    """
+    data['MaturityDate'] = pd.to_datetime(data['MaturityDate'], errors='coerce')
+    data['RevalDate'] = pd.to_datetime(data['RevalDate'], errors='coerce')
+    data['Time_to_maturity_month'] = (
+        (data['MaturityDate'].dt.year - data['RevalDate'].dt.year) * 12 +
+        (data['MaturityDate'].dt.month - data['RevalDate'].dt.month)
     )
+    bins = [0, 3, 6, 12, 24, 60, 120, 360, 1900]
+    labels = [1, 2, 3, 4, 5, 6, 7, 8]
+    data['Time_to_maturity_month_bins'] = pd.cut(
+        data['Time_to_maturity_month'], bins=bins, labels=labels, include_lowest=True
+    )
+    print("New columns created.")
+    return data
 
-# Add gridlines, title, and labels
-plt.grid(color='gray', linestyle='--', linewidth=0.5)
-plt.title('Scatter Plot of Price by Rating (Inliers, Outliers, and Extreme Outliers)', fontsize=14)
-plt.xlabel('Rating', fontsize=12)
-plt.ylabel('Price', fontsize=12)
-plt.xticks(fontsize=10)
-plt.yticks(fontsize=10)
-plt.legend(fontsize=10)
-plt.tight_layout()
+# Function to handle missing values
+def handle_missing_values(data, model_columns):
+    """
+    Handles missing values based on the data type of each column.
+    Args:
+        data (pd.DataFrame): The input DataFrame.
+        model_columns (list): Columns to process.
+    Returns:
+        pd.DataFrame: DataFrame with missing values handled.
+    """
+    for col in model_columns:
+        if pd.api.types.is_object_dtype(data[col]):
+            data[col].fillna("Unknown", inplace=True)
+        elif pd.api.types.is_numeric_dtype(data[col]):
+            data[col].fillna(0, inplace=True)
+        elif pd.api.types.is_datetime64_any_dtype(data[col]):
+            data[col].fillna(pd.Timestamp('1900-01-01'), inplace=True)
+    print("Missing values handled.")
+    return data
 
-plt.show()
+# Function to preprocess data
+def preprocess_data(file_path, required_columns, model_columns):
+    """
+    Perform data preprocessing including loading, column creation, handling missing values, and memory optimization.
+    Args:
+        file_path (str): Path to the input CSV file.
+        required_columns (list): Required columns to check in the dataset.
+        model_columns (list): Columns to handle for missing values.
+    Returns:
+        pd.DataFrame: Preprocessed DataFrame.
+    """
+    data = load_data(file_path)
+
+    # Check for required columns
+    missing_columns = [col for col in required_columns if col not in data.columns]
+    if missing_columns:
+        raise KeyError(f"Missing required columns: {missing_columns}")
+    print("Required columns are present.")
+
+    # Create new columns
+    data = create_new_columns(data)
+
+    # Handle missing values
+    data = handle_missing_values(data, model_columns)
+
+    # Reduce memory usage
+    data = reduce_memory_usage(data)
+
+    print("Data preprocessing completed.")
+    return data
