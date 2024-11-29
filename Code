@@ -2,123 +2,107 @@ import pandas as pd
 import numpy as np
 import os
 
-# Function to load data from a CSV file
 def load_data(file_path):
-    """
-    Load dataset from a CSV file.
-    Args:
-        file_path (str): Path to the CSV file.
-    Returns:
-        pd.DataFrame: Loaded DataFrame.
-    """
+    """Loads data from a given file path."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"The file {file_path} does not exist.")
     data = pd.read_csv(file_path)
-    print("Data successfully loaded.")
+    print("Data loaded successfully.")
     return data
 
-# Function to reduce memory usage
 def reduce_memory_usage(data):
-    """
-    Reduces memory usage of specified columns in a DataFrame by downcasting numerical types where possible.
-    Args:
-        data (pd.DataFrame): The DataFrame to optimize.
-    Returns:
-        pd.DataFrame: Memory-optimized DataFrame.
-    """
+    """Reduces memory usage of numerical columns in a DataFrame."""
     for col in data.columns:
         col_type = data[col].dtype
-        if pd.api.types.is_numeric_dtype(col_type):
-            c_min = data[col].min()
-            c_max = data[col].max()
-            if pd.api.types.is_integer_dtype(data[col]):
-                if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
-                    data[col] = data[col].astype(np.int8)
-                elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
-                    data[col] = data[col].astype(np.int16)
-                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
-                    data[col] = data[col].astype(np.int32)
-                else:
-                    data[col] = data[col].astype(np.int64)
-            elif pd.api.types.is_float_dtype(data[col]):
-                data[col] = data[col].astype(np.float32)
+        if col_type == 'object':
+            continue
+        c_min = data[col].min()
+        c_max = data[col].max()
+        if pd.api.types.is_integer_dtype(data[col]):
+            if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
+                data[col] = data[col].astype(np.int8)
+            elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                data[col] = data[col].astype(np.int16)
+            elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                data[col] = data[col].astype(np.int32)
+            else:
+                data[col] = data[col].astype(np.int64)
+        elif pd.api.types.is_float_dtype(data[col]):
+            data[col] = data[col].astype(np.float32)
     print("Memory optimization completed.")
     return data
 
-# Function to create new columns
-def create_new_columns(data):
+def preprocess_data(file_path, required_columns):
     """
-    Creates new columns in the DataFrame such as 'Time_to_maturity_month' and its bins.
-    Args:
-        data (pd.DataFrame): The input DataFrame.
-    Returns:
-        pd.DataFrame: DataFrame with new columns.
-    """
-    data['MaturityDate'] = pd.to_datetime(data['MaturityDate'], errors='coerce')
-    data['RevalDate'] = pd.to_datetime(data['RevalDate'], errors='coerce')
-    data['Time_to_maturity_month'] = (
-        (data['MaturityDate'].dt.year - data['RevalDate'].dt.year) * 12 +
-        (data['MaturityDate'].dt.month - data['RevalDate'].dt.month)
-    )
-    bins = [0, 3, 6, 12, 24, 60, 120, 360, 1900]
-    labels = [1, 2, 3, 4, 5, 6, 7, 8]
-    data['Time_to_maturity_month_bins'] = pd.cut(
-        data['Time_to_maturity_month'], bins=bins, labels=labels, include_lowest=True
-    )
-    print("New columns created.")
-    return data
-
-# Function to handle missing values
-def handle_missing_values(data, model_columns):
-    """
-    Handles missing values based on the data type of each column.
-    Args:
-        data (pd.DataFrame): The input DataFrame.
-        model_columns (list): Columns to process.
-    Returns:
-        pd.DataFrame: DataFrame with missing values handled.
-    """
-    for col in model_columns:
-        if pd.api.types.is_object_dtype(data[col]):
-            data[col].fillna("Unknown", inplace=True)
-        elif pd.api.types.is_numeric_dtype(data[col]):
-            data[col].fillna(0, inplace=True)
-        elif pd.api.types.is_datetime64_any_dtype(data[col]):
-            data[col].fillna(pd.Timestamp('1900-01-01'), inplace=True)
-    print("Missing values handled.")
-    return data
-
-# Function to preprocess data
-def preprocess_data(file_path, required_columns, model_columns):
-    """
-    Perform data preprocessing including loading, column creation, handling missing values, and memory optimization.
-    Args:
-        file_path (str): Path to the input CSV file.
-        required_columns (list): Required columns to check in the dataset.
-        model_columns (list): Columns to handle for missing values.
-    Returns:
-        pd.DataFrame: Preprocessed DataFrame.
+    Preprocesses the data, including:
+    - Checking required columns.
+    - Creating and converting new columns.
+    - Memory optimization.
+    - Flagging outliers.
     """
     data = load_data(file_path)
 
     # Check for required columns
-    missing_columns = [col for col in required_columns if col not in data.columns]
-    if missing_columns:
-        raise KeyError(f"Missing required columns: {missing_columns}")
-    print("Required columns are present.")
+    for col in required_columns:
+        if col not in data.columns:
+            raise KeyError(f"The required column '{col}' is missing in the dataset.")
+    print("All required columns are present.")
 
-    # Create new columns
-    data = create_new_columns(data)
+    # Drop rows with missing 'Time_to_maturity_month'
+    data.dropna(subset=['Time_to_maturity_month'], inplace=True)
+    data['Time_to_maturity_month'] = data['Time_to_maturity_month'].astype(int)
+    print("Converted 'Time_to_maturity_month' to integer.")
 
-    # Handle missing values
-    data = handle_missing_values(data, model_columns)
+    # Create bins for 'Time_to_maturity_month'
+    bins = [0, 3, 6, 12, 24, 60, 120, 360, 1900]
+    labels = [3, 6, 12, 24, 60, 120, 360, 1900]
+    data['Time_to_maturity_month_bins'] = pd.cut(
+        data['Time_to_maturity_month'], bins=bins, labels=labels, include_lowest=True
+    )
+    data['Time_to_maturity_month_bins'].replace([''], np.nan, inplace=True)
+    data.dropna(subset=['Time_to_maturity_month_bins'], inplace=True)
+    data['Time_to_maturity_month_bins'] = data['Time_to_maturity_month_bins'].astype(int)
+    print("Created and cleaned 'Time_to_maturity_month_bins'.")
 
-    # Reduce memory usage
+    # Optimize memory usage
     data = reduce_memory_usage(data)
 
-    print("Data preprocessing completed.")
-    return data
+    # Flag outliers
+    categorial_col = ['Category1', 'Category2', 'Rating']  # Example categorical columns
+    data = flag_outliers(data, categorial_col)
 
-required_columns = ['MaturityDate', 'RevalDate', 'BreakEvenSpread']
-model_columns = ['Time_to_maturity_month', 'BreakEvenSpread']
-preprocessed_data = preprocess_data('data.csv', required_columns, model_columns)
+    # Separate flagged and non-flagged data
+    flagged_data = data[data['IsOutlier'] == 'Exclude']
+    non_flagged_data = data[data['IsOutlier'] == '*']
+    print("Data separated into flagged and non-flagged datasets.")
+
+    # Remove 'Rating' from categorical columns (not a feature for the model)
+    if 'Rating' in categorial_col:
+        categorial_col.remove('Rating')
+
+    numerical_col = ['Time_to_maturity_month_bins']
+    print(f"Categorical columns: {categorial_col}")
+    print(f"Numerical columns: {numerical_col}")
+
+    return non_flagged_data, flagged_data, categorial_col, numerical_col
+
+def flag_outliers(data, categorial_col):
+    """
+    Flags outliers based on specific conditions and adds 'IsOutlier' and 'Comment' columns.
+    """
+    def evaluate_outlier(row):
+        # Check for specific values in categorical columns
+        if any(val in ['WR', 'NR', 'Undefined', 'Unknown'] for val in row[categorial_col]):
+            return 'Exclude', 'Contains WR, NR, Undefined, or Unknown'
+        
+        # Check for BreakEvenSpread conditions
+        if pd.isna(row['BreakEvenSpread']) or row['BreakEvenSpread'] < 5 or row['BreakEvenSpread'] > 10880:
+            return 'Exclude', 'BreakEvenSpread less than 5 or greater than 10,880'
+        
+        # If no conditions are met
+        return '*', ''
+
+    # Apply the evaluation to each row
+    data[['IsOutlier', 'Comment']] = data.apply(lambda row: evaluate_outlier(row), axis=1).apply(pd.Series)
+    print("Outliers flagged and comments added.")
+    return data
