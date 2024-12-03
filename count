@@ -6,7 +6,11 @@ iso_date = "2024-12-03"
 # Convert ISO string to a datetime object
 dt = datetime.fromisoformat(iso_date)
 
-# Format the datetime object to your desired format
-formatted_date = f"{dt.year},{dt.month},{dt.day}"
+# Convert to the custom format as a string
+formatted_date_str = f"{dt.year},{dt.month},{dt.day}"
 
-print(formatted_date)  # Output: 2024,12,3
+# Convert the custom string back to a datetime object
+formatted_date = datetime.strptime(formatted_date_str, "%Y,%m,%d")
+
+print("Datetime object:", formatted_date)  # Datetime object: 2024-12-03 00:00:00
+print("Type:", type(formatted_date))       # Type: <class 'datetime.datetime'>
