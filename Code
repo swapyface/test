@@ -1,108 +1,75 @@
 import pandas as pd
-import numpy as np
-import os
+from datetime import datetime
+from sqlalchemy import create_engine
 
-def load_data(file_path):
-    """Loads data from a given file path."""
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"The file {file_path} does not exist.")
-    data = pd.read_csv(file_path)
-    print("Data loaded successfully.")
+def validate_date_range(start_date, end_date):
+    """Validate date format and range."""
+    try:
+        start = datetime.strptime(start_date, '%d-%m-%y')
+        end = datetime.strptime(end_date, '%d-%m-%y')
+        if start > end:
+            raise ValueError("Start date must be before the end date.")
+        return True
+    except ValueError as e:
+        print(f"Date validation error: {e}")
+        return False
+
+def injection_model(start_date, end_date):
+    """Fetch data for the given date range from the database."""
+    try:
+        # Replace with your database connection details
+        engine = create_engine('mysql+pymysql://user:password@host/database')
+        query = """
+        SELECT * 
+        FROM your_table
+        WHERE date_column BETWEEN :start_date AND :end_date
+        """
+        # Fetch data using parameterized query
+        with engine.connect() as connection:
+            data = pd.read_sql_query(query, connection, params={"start_date": start_date, "end_date": end_date})
+        return data
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return pd.DataFrame()
+
+def preprocess_data(data):
+    """Preprocess data before feeding it to the model."""
+    # Your preprocessing logic here
+    print("Preprocessing data...")
     return data
 
-def reduce_memory_usage(data):
-    """Reduces memory usage of numerical columns in a DataFrame."""
-    for col in data.columns:
-        col_type = data[col].dtype
-        if col_type == 'object':
-            continue
-        c_min = data[col].min()
-        c_max = data[col].max()
-        if pd.api.types.is_integer_dtype(data[col]):
-            if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
-                data[col] = data[col].astype(np.int8)
-            elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
-                data[col] = data[col].astype(np.int16)
-            elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
-                data[col] = data[col].astype(np.int32)
-            else:
-                data[col] = data[col].astype(np.int64)
-        elif pd.api.types.is_float_dtype(data[col]):
-            data[col] = data[col].astype(np.float32)
-    print("Memory optimization completed.")
+def run_isolation_forest(data):
+    """Run the Isolation Forest model."""
+    # Your Isolation Forest implementation here
+    print("Running Isolation Forest...")
     return data
 
-def preprocess_data(file_path, required_columns):
-    """
-    Preprocesses the data, including:
-    - Checking required columns.
-    - Creating and converting new columns.
-    - Memory optimization.
-    - Flagging outliers.
-    """
-    data = load_data(file_path)
+def main(file_path=None, start_date=None, end_date=None):
+    if file_path:
+        # Load data from Excel if file_path is provided
+        data = pd.read_excel(file_path)
+    elif start_date and end_date:
+        # Validate date range
+        if validate_date_range(start_date, end_date):
+            # Fetch data for the given date range
+            data = injection_model(start_date, end_date)
+        else:
+            return
+    else:
+        print("No data source provided.")
+        return
+    
+    # Preprocess data
+    processed_data = preprocess_data(data)
+    
+    # Run the Isolation Forest model
+    results = run_isolation_forest(processed_data)
+    
+    # Save the results
+    results.to_excel("output.xlsx", index=False)
+    print("Results saved to output.xlsx")
 
-    # Check for required columns
-    for col in required_columns:
-        if col not in data.columns:
-            raise KeyError(f"The required column '{col}' is missing in the dataset.")
-    print("All required columns are present.")
-
-    # Drop rows with missing 'Time_to_maturity_month'
-    data.dropna(subset=['Time_to_maturity_month'], inplace=True)
-    data['Time_to_maturity_month'] = data['Time_to_maturity_month'].astype(int)
-    print("Converted 'Time_to_maturity_month' to integer.")
-
-    # Create bins for 'Time_to_maturity_month'
-    bins = [0, 3, 6, 12, 24, 60, 120, 360, 1900]
-    labels = [3, 6, 12, 24, 60, 120, 360, 1900]
-    data['Time_to_maturity_month_bins'] = pd.cut(
-        data['Time_to_maturity_month'], bins=bins, labels=labels, include_lowest=True
-    )
-    data['Time_to_maturity_month_bins'].replace([''], np.nan, inplace=True)
-    data.dropna(subset=['Time_to_maturity_month_bins'], inplace=True)
-    data['Time_to_maturity_month_bins'] = data['Time_to_maturity_month_bins'].astype(int)
-    print("Created and cleaned 'Time_to_maturity_month_bins'.")
-
-    # Optimize memory usage
-    data = reduce_memory_usage(data)
-
-    # Flag outliers
-    categorial_col = ['Category1', 'Category2', 'Rating']  # Example categorical columns
-    data = flag_outliers(data, categorial_col)
-
-    # Separate flagged and non-flagged data
-    flagged_data = data[data['IsOutlier'] == 'Exclude']
-    non_flagged_data = data[data['IsOutlier'] == '*']
-    print("Data separated into flagged and non-flagged datasets.")
-
-    # Remove 'Rating' from categorical columns (not a feature for the model)
-    if 'Rating' in categorial_col:
-        categorial_col.remove('Rating')
-
-    numerical_col = ['Time_to_maturity_month_bins']
-    print(f"Categorical columns: {categorial_col}")
-    print(f"Numerical columns: {numerical_col}")
-
-    return non_flagged_data, flagged_data, categorial_col, numerical_col
-
-def flag_outliers(data, categorial_col):
-    """
-    Flags outliers based on specific conditions and adds 'IsOutlier' and 'Comment' columns.
-    """
-    def evaluate_outlier(row):
-        # Check for specific values in categorical columns
-        if any(val in ['WR', 'NR', 'Undefined', 'Unknown'] for val in row[categorial_col]):
-            return 'Exclude', 'Contains WR, NR, Undefined, or Unknown'
-        
-        # Check for BreakEvenSpread conditions
-        if pd.isna(row['BreakEvenSpread']) or row['BreakEvenSpread'] < 5 or row['BreakEvenSpread'] > 10880:
-            return 'Exclude', 'BreakEvenSpread less than 5 or greater than 10,880'
-        
-        # If no conditions are met
-        return '*', ''
-
-    # Apply the evaluation to each row
-    data[['IsOutlier', 'Comment']] = data.apply(lambda row: evaluate_outlier(row), axis=1).apply(pd.Series)
-    print("Outliers flagged and comments added.")
-    return data
+# Example Usage
+if __name__ == "__main__":
+    # Pass either an Excel file or a date range
+    main(start_date="01-01-24", end_date="02-01-24")
