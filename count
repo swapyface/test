@@ -1,30 +1,12 @@
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import skew
+from datetime import datetime
 
-# Example dataset
-# Assuming 'rating' is categorical and 'price' is numerical
-data = pd.DataFrame({
-    'rating': ['A', 'A', 'B', 'B', 'C', 'C', 'A', 'B', 'C', 'A'],
-    'price': [10, 15, 20, 25, 30, 35, 12, 22, 32, 18]
-})
+# Example ISO-formatted date
+iso_date = "2024-12-03"
 
-# Group by rating and calculate skewness
-skewness = data.groupby('rating')['price'].apply(lambda x: skew(x, bias=False))
-print("Skewness for each rating:\n", skewness)
+# Convert ISO string to a datetime object
+dt = datetime.fromisoformat(iso_date)
 
-# Visualization
-unique_ratings = data['rating'].unique()
-fig, axes = plt.subplots(len(unique_ratings), 1, figsize=(8, len(unique_ratings) * 4))
+# Format the datetime object to your desired format
+formatted_date = f"{dt.year},{dt.month},{dt.day}"
 
-for i, rating in enumerate(unique_ratings):
-    subset = data[data['rating'] == rating]
-    sns.histplot(subset['price'], kde=True, ax=axes[i], color='blue')
-    axes[i].set_title(f"Distribution for Rating: {rating} (Skewness: {skewness[rating]:.2f})")
-    axes[i].set_xlabel('Price')
-    axes[i].set_ylabel('Frequency')
-
-plt.tight_layout()
-plt.show()
+print(formatted_date)  # Output: 2024,12,3
