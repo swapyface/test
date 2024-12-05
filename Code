@@ -1,75 +1,10 @@
 import pandas as pd
-from datetime import datetime
-from sqlalchemy import create_engine
 
-def validate_date_range(start_date, end_date):
-    """Validate date format and range."""
-    try:
-        start = datetime.strptime(start_date, '%d-%m-%y')
-        end = datetime.strptime(end_date, '%d-%m-%y')
-        if start > end:
-            raise ValueError("Start date must be before the end date.")
-        return True
-    except ValueError as e:
-        print(f"Date validation error: {e}")
-        return False
+# Sample DataFrame
+data = {'price': [11, 16, 1101]}
+df = pd.DataFrame(data)
 
-def injection_model(start_date, end_date):
-    """Fetch data for the given date range from the database."""
-    try:
-        # Replace with your database connection details
-        engine = create_engine('mysql+pymysql://user:password@host/database')
-        query = """
-        SELECT * 
-        FROM your_table
-        WHERE date_column BETWEEN :start_date AND :end_date
-        """
-        # Fetch data using parameterized query
-        with engine.connect() as connection:
-            data = pd.read_sql_query(query, connection, params={"start_date": start_date, "end_date": end_date})
-        return data
-    except Exception as e:
-        print(f"Error fetching data: {e}")
-        return pd.DataFrame()
+# Rounding to the nearest multiple of 10
+df['rounded_price'] = df['price'].apply(lambda x: round(x, -1))
 
-def preprocess_data(data):
-    """Preprocess data before feeding it to the model."""
-    # Your preprocessing logic here
-    print("Preprocessing data...")
-    return data
-
-def run_isolation_forest(data):
-    """Run the Isolation Forest model."""
-    # Your Isolation Forest implementation here
-    print("Running Isolation Forest...")
-    return data
-
-def main(file_path=None, start_date=None, end_date=None):
-    if file_path:
-        # Load data from Excel if file_path is provided
-        data = pd.read_excel(file_path)
-    elif start_date and end_date:
-        # Validate date range
-        if validate_date_range(start_date, end_date):
-            # Fetch data for the given date range
-            data = injection_model(start_date, end_date)
-        else:
-            return
-    else:
-        print("No data source provided.")
-        return
-    
-    # Preprocess data
-    processed_data = preprocess_data(data)
-    
-    # Run the Isolation Forest model
-    results = run_isolation_forest(processed_data)
-    
-    # Save the results
-    results.to_excel("output.xlsx", index=False)
-    print("Results saved to output.xlsx")
-
-# Example Usage
-if __name__ == "__main__":
-    # Pass either an Excel file or a date range
-    main(start_date="01-01-24", end_date="02-01-24")
+print(df)
