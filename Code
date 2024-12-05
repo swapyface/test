@@ -1,10 +1,23 @@
 import pandas as pd
 
 # Sample DataFrame
-data = {'price': [11, 16, 1101]}
+data = {'price': [5, 11, 150, 1101, 5000, 9999]}
 df = pd.DataFrame(data)
 
-# Rounding to the nearest multiple of 10
-df['rounded_price'] = df['price'].apply(lambda x: round(x, -1))
+# Custom function to handle rounding and mapping based on ranges
+def custom_rounding(price):
+    if 1 <= price <= 10:
+        return 10
+    elif 11 <= price <= 100:
+        return -1
+    elif 101 <= price <= 1000:
+        return -2
+    elif 1001 <= price <= 10000:
+        return -3
+    else:
+        return None  # Handle cases outside these ranges if needed
+
+# Apply the function to the DataFrame
+df['rounded_price'] = df['price'].apply(custom_rounding)
 
 print(df)
