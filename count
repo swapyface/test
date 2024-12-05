@@ -1,18 +1,13 @@
-from datetime import date, datetime
+import pandas as pd
 
-# Convert ISO-formatted strings to date objects
-input_end_date = date.fromisoformat('2024-12-02')
-input_start_date = date.fromisoformat('2024-11-02')
+# Sample dataframe
+data = {
+    'iso-result': ['inlier', 'outlier', 'excluded', 'inlier', 'inlier', 'outlier'],
+    'value': [10, 20, 30, 40, 50, 60]
+}
+df = pd.DataFrame(data)
 
-# Calculate the number of days between the two dates
-num_of_days = (input_end_date - input_start_date).days
+# Drop rows where 'iso-result' contains 'excluded' or 'outlier'
+filtered_df = df[~df['iso-result'].isin(['excluded', 'outlier'])]
 
-# Format the end date into a custom string
-formatted_end_date_str = f"{input_end_date.year},{input_end_date.month},{input_end_date.day}"
-
-# Convert the custom string back to a datetime object
-formatted_end_date = datetime.strptime(formatted_end_date_str, "%Y,%m,%d")
-
-# Print results
-print("Number of days:", num_of_days)
-print("Formatted end date (datetime):", formatted_end_date)
+print(filtered_df)
