@@ -1,1 +1,45 @@
-df.loc[:, 'categorical_column'] = df['categorical_column'].fillna('Default_Value')
+import pandas as pd
+from datetime import datetime
+
+def dataframe_to_qztable(df: pd.DataFrame):
+    types = []
+    _type_mapping = {"float64": "double", "int64": "int32", "int32": "int32", "datetime64[ns]": "time"}
+    columns = df.columns.tolist()
+    if not types:
+        types = [_type_mapping.get(str(v), "string") for v in df.dtypes]
+
+    schema = qztable.Schema(columns, types)
+    qzt = qztable.Table(schema)
+    qzt.append(df.values)
+    return qzt
+
+def upload(result, start_date, end_date):
+    try:
+        dbname = 'credit_qa'
+        sdb = sandra.connect(dbname)
+        qz_table = dataframe_to_qztable(result)
+
+        # Try to update the database
+        sdb.update_or_new(
+            "Container",
+            f"/Credit/RiskBatch/BreakEvenSpread/ISO_result_from_{start_date.date()}_to_{end_date.date()}",
+            qz_table
+        )
+        return "Result uploaded to Sandra location /Credit/RiskBatch/BreakEvenSpread/HistoricalData"
+
+    except sandra.ConnectionError:
+        return "Error: Unable to connect to the database. Please check your connection."
+
+    except sandra.UploadError:
+        return "Error: File upload failed. Please check the file format or database permissions."
+
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
+
+    finally:
+        # Optional: Close the database connection if applicable
+        if 'sdb' in locals():
+            try:
+                sdb.close()
+            except Exception:
+                pass
