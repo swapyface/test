@@ -1,19 +1,21 @@
 import pandas as pd
 
 # Example DataFrame
-df = pd.DataFrame({
-    'Id': [1, 2, 2, 3, 4],
-    'Value': ['A', 'B', 'B', 'C', 'D']
-})
+data = {
+    'name': ['se_xyz', 'te_abc', 'other_name', 'another_name'],
+    'db': ['cs.120', 'ba.bder', 'vs 123', 'cs.456']
+}
 
-# Mock function to get the date for a given Id
-# Replace this with your actual function
-def get_date_for_id(id):
-    # Example logic (replace this with actual database call or logic)
-    date_mapping = {1: '2024-12-01', 2: '2024-12-02', 3: '2024-12-03'}
-    return date_mapping.get(id, None)
+df = pd.DataFrame(data)
 
-# Apply the function to each Id and create a new 'Date' column
-df['Date'] = df['Id'].apply(get_date_for_id)
+# Step 1: Drop rows where 'name' starts with 'se' or 'te'
+df = df[~df['name'].str.startswith(('se', 'te'))]
 
+# Step 2: Extract values after '.' in 'db' column into a new column
+df['db_extracted'] = df['db'].str.extract(r'\.(\S+)', expand=False)
+
+# Step 3: Remove rows where 'db' does not have a period (e.g., 'vs 123')
+df = df[df['db'].str.contains(r'\.')]
+
+# Final DataFrame
 print(df)
