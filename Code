@@ -1,25 +1,13 @@
+maturity_dates = []
 
-# Function to get maturity date using CUSIP ID
-def cusip_maturity_date(cusip_id):
-    try:
-        # Connect to the 'refdata' database
-        with sandra.connect("refdata") as conn:
-            # Retrieve the bond object using cusip_id
-            bond_obj = conn.cells.Bond.getFromID("CUSIP", cusip_id)
-            # Extract maturity date from the bond object
-            maturity_date = bond_obj.MaturityDate()
-            return maturity_date
-    except Exception as e:
-        print(f"Error retrieving maturity date for CUSIP ID {cusip_id}: {e}")
-        return None
+# Loop through the DataFrame rows
+for index, row in data.iterrows():
+    cusip_id = row['Cusip']
+    maturity_date = cusip_maturity_date(cusip_id)
+    maturity_dates.append(maturity_date)
 
-# Example DataFrame
-data = pd.DataFrame({
-    'Cusip': ['12345678', '87654321', '11223344']  # Replace with valid CUSIP IDs
-})
-
-# Apply the function to retrieve maturity dates
-data['MaturityDate'] = data['Cusip'].apply(cusip_maturity_date)
+# Assign the collected maturity dates back to the DataFrame
+data['MaturityDate'] = maturity_dates
 
 # Display the updated DataFrame
 print(data)
