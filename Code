@@ -1,21 +1,25 @@
-import pandas as pd
+
+# Function to get maturity date using CUSIP ID
+def cusip_maturity_date(cusip_id):
+    try:
+        # Connect to the 'refdata' database
+        with sandra.connect("refdata") as conn:
+            # Retrieve the bond object using cusip_id
+            bond_obj = conn.cells.Bond.getFromID("CUSIP", cusip_id)
+            # Extract maturity date from the bond object
+            maturity_date = bond_obj.MaturityDate()
+            return maturity_date
+    except Exception as e:
+        print(f"Error retrieving maturity date for CUSIP ID {cusip_id}: {e}")
+        return None
 
 # Example DataFrame
-data = {
-    'name': ['se_xyz', 'te_abc', 'other_name', 'another_name'],
-    'db': ['cs.120', 'ba.bder', 'vs 123', 'cs.456']
-}
+data = pd.DataFrame({
+    'Cusip': ['12345678', '87654321', '11223344']  # Replace with valid CUSIP IDs
+})
 
-df = pd.DataFrame(data)
+# Apply the function to retrieve maturity dates
+data['MaturityDate'] = data['Cusip'].apply(cusip_maturity_date)
 
-# Step 1: Drop rows where 'name' starts with 'se' or 'te'
-df = df[~df['name'].str.startswith(('se', 'te'))]
-
-# Step 2: Extract values after '.' in 'db' column into a new column
-df['db_extracted'] = df['db'].str.extract(r'\.(\S+)', expand=False)
-
-# Step 3: Remove rows where 'db' does not have a period (e.g., 'vs 123')
-df = df[df['db'].str.contains(r'\.')]
-
-# Final DataFrame
-print(df)
+# Display the updated DataFrame
+print(data)
