@@ -1,13 +1,25 @@
-maturity_dates = []
+import pandas as pd
 
-# Loop through the DataFrame rows
-for index, row in data.iterrows():
-    cusip_id = row['Cusip']
-    maturity_date = cusip_maturity_date(cusip_id)
-    maturity_dates.append(maturity_date)
+# Example DataFrame
+df = pd.DataFrame({
+    'Id': [1, 2, 2, 3, 4, 1],
+    'Value': ['A', 'B', 'B', 'C', 'D', 'E']
+})
 
-# Assign the collected maturity dates back to the DataFrame
-data['MaturityDate'] = maturity_dates
+# Mock function to get the RE Date for a given Id
+# Replace this with your actual function
+def get_re_date(id):
+    # Example logic (replace this with actual database call or logic)
+    date_mapping = {1: '2024-12-01', 2: '2024-12-02', 3: '2024-12-03'}
+    return date_mapping.get(id, None)
 
-# Display the updated DataFrame
-print(data)
+# Step 1: Extract unique IDs
+unique_ids = df['Id'].unique()
+
+# Step 2: Fetch dates for unique IDs
+id_to_date = {id_: get_re_date(id_) for id_ in unique_ids}
+
+# Step 3: Map dates back to the original DataFrame
+df['RE_Date'] = df['Id'].map(id_to_date)
+
+print(df)
