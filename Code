@@ -1,25 +1,54 @@
 import pandas as pd
 
-# Example DataFrame
-df = pd.DataFrame({
-    'Id': [1, 2, 2, 3, 4, 1],
-    'Value': ['A', 'B', 'B', 'C', 'D', 'E']
-})
+def create_new_columns(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to create new columns 'Rating', 'Time_to_maturity_month', 
+    and 'Time_to_maturity_bucket' in the DataFrame.
 
-# Mock function to get the RE Date for a given Id
-# Replace this with your actual function
-def get_re_date(id):
-    # Example logic (replace this with actual database call or logic)
-    date_mapping = {1: '2024-12-01', 2: '2024-12-02', 3: '2024-12-03'}
-    return date_mapping.get(id, None)
+    Parameters:
+    - data: The input DataFrame
 
-# Step 1: Extract unique IDs
-unique_ids = df['Id'].unique()
+    Returns:
+    - DataFrame with new columns
+    """
+    # Ensure 'DerivedRating', 'MaturityDate', 'RevalDate' columns exist
+    required_columns = ['DerivedRating', 'MaturityDate', 'RevalDate', 'BreakEvenSpread']
+    if not all(col in data.columns for col in required_columns):
+        raise ValueError(f"DataFrame must contain the following columns: {', '.join(required_columns)}")
 
-# Step 2: Fetch dates for unique IDs
-id_to_date = {id_: get_re_date(id_) for id_ in unique_ids}
+    # Clean the 'Rating' column by removing non-alphabetical characters
+    data['Rating'] = data['DerivedRating'].str.replace(r'[^A-Za-z]', '', regex=True).str.upper()
+    
+    # Convert 'MaturityDate' and 'RevalDate' to DateTime type with error handling
+    data['MaturityDate'] = pd.to_datetime(data['MaturityDate'], errors='coerce')
+    data['RevalDate'] = pd.to_datetime(data['RevalDate'], errors='coerce')
 
-# Step 3: Map dates back to the original DataFrame
-df['RE_Date'] = df['Id'].map(id_to_date)
+    # Check for invalid dates
+    if data['MaturityDate'].isnull().any() or data['RevalDate'].isnull().any():
+        print("Warning: Some dates could not be converted and are set to NaT.")
+    
+    # Calculate 'Time_to_maturity_month' in months
+    data['Time_to_maturity_month'] = (
+        (data['MaturityDate'].dt.year - data['RevalDate'].dt.year) * 12 +
+        (data['MaturityDate'].dt.month - data['RevalDate'].dt.month)
+    )
+    
+    # Define the bin edges and labels for 'Time_to_maturity_bucket'
+    bucket = [0, 6, 18, 30, 42, 54, 72, 102, 180, 300, 1900]
+    labels = [6, 18, 30, 42, 54, 72, 102, 180, 300, 1900]
+    
+    # Create 'Time_to_maturity_bucket' by binning 'Time_to_maturity_month'
+    data['Time_to_maturity_bucket'] = pd.cut(
+        data['Time_to_maturity_month'], bins=bucket, labels=labels, include_lowest=True
+    )
+    
+    print('Time to maturity month bins created')
 
-print(df)
+    # Handle NaN values for 'Time_to_maturity_month' and 'BreakEvenSpread'
+    data['Time_to_maturity_month'] = data['Time_to_maturity_month'].fillna(-100).astype(int)
+    data['BreakEvenSpread'] = data['BreakEvenSpread'].fillna(0).astype(int)
+
+    print('BreakEvenSpread converted to int')
+    print('New columns created.')
+
+    return data
