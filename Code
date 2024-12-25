@@ -49,11 +49,19 @@ class DataIngestion:
 
     DATE_FORMAT = "%Y-%m-%d"
 
-    def __init__(self, env: str, snapshot: str, mandatory_cols: List[str], report_fields: List[Dict[str, Any]]):
+    def __init__(self, env: str = 'prod', snapshot: str = 'OFFICIAL', mandatory_cols: List[str] = None, report_fields: List[Dict[str, Any]] = None):
+        """
+        Initialize the DataIngestion class.
+
+        :param env: Environment name (e.g., 'prod', 'dev').
+        :param snapshot: Snapshot type (e.g., 'OFFICIAL').
+        :param mandatory_cols: List of mandatory columns for the data.
+        :param report_fields: List of report field definitions.
+        """
         self.env = env
         self.snapshot = snapshot
-        self.mandatory_cols = mandatory_cols
-        self.report_fields = [ReportField(**field) for field in report_fields]
+        self.mandatory_cols = mandatory_cols or []
+        self.report_fields = [ReportField(**field) for field in (report_fields or [])]
 
     def for_date_series(self, num_days: int, formatted_end_date: datetime) -> List[str]:
         """
