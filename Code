@@ -1,200 +1,123 @@
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+from sklearn.ensemble import IsolationForest
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import numpy as np
+from typing import Dict, Any
 
 
-class DataPreprocessor:
-    def __init__(self):
-        self.categorical_cols = []
-        self.numerical_cols = []
+class DataEncoder:
+    def __init__(self, numerical_cols: list[str], categorical_cols: list[str]):
+        self.numerical_cols = numerical_cols
+        self.categorical_cols = categorical_cols
+        self.scaler = MinMaxScaler()
+        self.encoder = OneHotEncoder(sparse_output=False, drop="first")
 
+    def encode(self, data: pd.DataFrame) -> np.ndarray:
+        """Encodes the numerical and categorical columns in the dataset."""
+        # Scale numerical data
+        scaled_data = self.scaler.fit_transform(data[self.numerical_cols])
+
+        # Encode categorical data
+        encoded_categorical = self.encoder.fit_transform(data[self.categorical_cols])
+
+        # Combine encoded data
+        return np.hstack((encoded_categorical, scaled_data))
+
+
+class IsolationForestConfig:
     @staticmethod
-    def reduce_memory_usage(data: pd.DataFrame) -> pd.DataFrame:
-        """
-        Optimizes the memory usage of the DataFrame by downcasting numerical columns.
+    def get_parameters(dataset_size: int) -> Dict[str, Any]:
+        """Returns Isolation Forest parameters based on dataset size."""
+        if dataset_size < 100:
+            return {"n_estimators": 20, "max_samples": dataset_size, "contamination": 0.05, "max_features": 1.0}
+        elif 100 <= dataset_size < 500:
+            return {"n_estimators": 50, "max_samples": 100, "contamination": 0.05, "max_features": 1.0}
+        elif 500 <= dataset_size < 1000:
+            return {"n_estimators": 100, "max_samples": 256, "contamination": 0.05, "max_features": 1.0}
+        elif 1000 <= dataset_size < 5000:
+            return {"n_estimators": 300, "max_samples": 500, "contamination": 0.05, "max_features": 1.0}
+        elif 5000 <= dataset_size < 10000:
+            return {"n_estimators": 500, "max_samples": 1500, "contamination": 0.05, "max_features": 1.0}
+        elif 10000 <= dataset_size < 50000:
+            return {"n_estimators": 1000, "max_samples": 3000, "contamination": 0.05, "max_features": 1.0}
+        elif 50000 <= dataset_size < 100000:
+            return {"n_estimators": 1500, "max_samples": 5000, "contamination": 0.05, "max_features": 1.0}
+        elif 100000 <= dataset_size < 300000:
+            return {"n_estimators": 2000, "max_samples": 6000, "contamination": 0.05, "max_features": 1.0}
+        elif 300000 <= dataset_size < 500000:
+            return {"n_estimators": 5000, "max_samples": 15000, "contamination": 0.05, "max_features": 1.0}
+        elif 500000 <= dataset_size < 1000000:
+            return {"n_estimators": 7000, "max_samples": 20000, "contamination": 0.05, "max_features": 1.0}
+        else:
+            raise ValueError("Dataset size out of supported range.")
 
-        :param data: Input DataFrame.
-        :type data: pd.DataFrame
-        :return: Memory-optimized DataFrame.
-        :rtype: pd.DataFrame
-        """
-        for col in data.columns:
-            col_type = data[col].dtype
-            if pd.api.types.is_numeric_dtype(col_type):
-                c_min = data[col].min()
-                c_max = data[col].max()
 
-                if pd.api.types.is_integer_dtype(data[col]):
-                    if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
-                        data[col] = data[col].astype(np.int8)
-                    elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
-                        data[col] = data[col].astype(np.int16)
-                    elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
-                        data[col] = data[col].astype(np.int32)
-                    else:
-                        data[col] = data[col].astype(np.int64)
-                elif pd.api.types.is_float_dtype(data[col]):
-                    data[col] = data[col].astype(np.float32)
-        print("Memory optimization completed.")
-        return data
+class RatingProcessor:
+    def __init__(self, numerical_cols: list[str], categorical_cols: list[str]):
+        self.encoder = DataEncoder(numerical_cols, categorical_cols)
 
-    def handle_missing_values(self, data: pd.DataFrame, model_columns: list) -> pd.DataFrame:
-        """
-        Handles missing values for specified columns.
-
-        :param data: Input DataFrame.
-        :type data: pd.DataFrame
-        :param model_columns: List of columns to process.
-        :type model_columns: list
-        :return: DataFrame with missing values filled.
-        :rtype: pd.DataFrame
-        """
-        for col in model_columns:
-            if col not in data.columns:
-                print(f"Column '{col}' not found in DataFrame. Skipping.")
-                continue
-
-            if pd.api.types.is_object_dtype(data[col]):
-                data[col].fillna("Unknown", inplace=True)
-                self.categorical_cols.append(col)
-            elif pd.api.types.is_numeric_dtype(data[col]):
-                data[col].fillna(0, inplace=True)
-                self.numerical_cols.append(col)
-            elif pd.api.types.is_datetime64_any_dtype(data[col]):
-                data[col].fillna(pd.Timestamp("1900-01-01"), inplace=True)
-
-        print("Missing values handled.")
-        print("Categorical columns:", self.categorical_cols)
-        print("Numerical columns:", self.numerical_cols)
-        return data
-
-    @staticmethod
-    def flag_outliers(data: pd.DataFrame, categorical_cols: list, numerical_cols: list) -> pd.DataFrame:
-        """
-        Flags invalid data rows and adds 'ISO_result' and 'Comment' columns.
-
-        :param data: Input DataFrame.
-        :type data: pd.DataFrame
-        :param categorical_cols: List of categorical columns to evaluate.
-        :type categorical_cols: list
-        :param numerical_cols: List of numerical columns to evaluate.
-        :type numerical_cols: list
-        :return: DataFrame with flagged rows.
-        :rtype: pd.DataFrame
-        """
-        def evaluate_outlier(row):
-            if any(row[col] in ['WR', 'NR', 'Undefined', 'Unknown'] for col in categorical_cols if col in row):
-                return 'Exclude', 'Contains WR, NR, Undefined, or Unknown'
-            if pd.isna(row.get('BreakEvenSpread')) or row.get('BreakEvenSpread', 0) < 5 or row['BreakEvenSpread'] > 10000:
-                return 'Exclude', 'BreakEvenSpread less than 5 or greater than 10,000'
-            if pd.isna(row.get('Time_to_maturity_month')) or row.get('Time_to_maturity_month', -1) < 0 or row['Time_to_maturity_month'] > 1900:
-                return 'Exclude', 'MaturityDate is invalid'
-            return 'Valid', ''
-
-        data[['ISO_result', 'Comment']] = data.apply(lambda row: pd.Series(evaluate_outlier(row)), axis=1)
-        print("Outliers flagged and comments added.")
-        return data
-
-    def preprocess_data(self, data: pd.DataFrame, required_columns: list, model_columns: list) -> tuple:
-        """
-        Preprocesses the data by:
-        - Checking required columns.
-        - Handling missing values.
-        - Flagging outliers.
-        - Reducing memory usage.
-
-        :param data: Input DataFrame.
-        :type data: pd.DataFrame
-        :param required_columns: Required columns for the dataset.
-        :type required_columns: list
-        :param model_columns: Columns to process for missing values.
-        :type model_columns: list
-        :return: Tuple containing non-flagged data, flagged data, updated column lists, and dataset length.
-        :rtype: tuple (pd.DataFrame, pd.DataFrame, list, list, int)
-        """
+    def process_rating(self, data: pd.DataFrame, rating: int) -> pd.DataFrame:
+        """Processes data for a specific rating."""
         try:
-            # Check for required columns
-            for col in required_columns:
-                if col not in data.columns:
-                    raise KeyError(f"The required column '{col}' is missing in the dataset.")
-                else:
-                    print(f"Column '{col}' found.")
+            print(f"Processing Rating: {rating}")
 
-            # Drop duplicates
-            data = data.drop_duplicates(
-                subset=['Cusip', 'BreakEvenSpread', 'Subordination', 'Product', 'IndustryLevel3', 'MaturityDate', 'DerivedRating'],
-                keep='first'
+            # Filter data for the specific rating
+            rating_data = data[data["Rating"] == rating]
+
+            # Get Isolation Forest parameters
+            params = IsolationForestConfig.get_parameters(len(rating_data))
+            print(f"Rating {rating} parameters: {params}")
+
+            # Initialize Isolation Forest model
+            iso_model = IsolationForest(
+                n_estimators=params["n_estimators"],
+                max_samples=params["max_samples"],
+                contamination=params["contamination"],
+                max_features=params["max_features"],
+                random_state=42,
             )
 
-            # Reduce memory usage
-            data = self.reduce_memory_usage(data)
+            # Encode data
+            X = self.encoder.encode(rating_data)
 
-            # Handle missing values
-            data = self.handle_missing_values(data, model_columns)
+            # Predict outliers
+            rating_data["ISO_result"] = iso_model.fit_predict(X)
 
-            # Flag outliers
-            data = self.flag_outliers(data, self.categorical_cols, self.numerical_cols)
+            # Replace -1 and 1 with "outlier" and "inlier"
+            rating_data["ISO_result"] = rating_data["ISO_result"].replace({-1: "outlier", 1: "inlier"})
 
-            # Separate flagged and non-flagged data
-            flagged_data = data[data['ISO_result'] == 'Exclude']
-            non_flagged_data = data[data['ISO_result'] == 'Valid']
-
-            # Convert 'Time_to_maturity_month_bucket' to integer if it exists
-            if 'Time_to_maturity_month_bucket' in non_flagged_data.columns:
-                non_flagged_data['Time_to_maturity_month_bucket'] = non_flagged_data['Time_to_maturity_month_bucket'].astype(int)
-                self.numerical_cols.append('Time_to_maturity_month_bucket')
-
-            # Remove 'Rating' from categorical_cols if it's not used as a feature
-            if 'Rating' in self.categorical_cols:
-                self.categorical_cols.remove('Rating')
-
-            print("Preprocessing completed.")
-            print("Updated categorical columns:", self.categorical_cols)
-            print("Updated numerical columns:", self.numerical_cols)
-
-            return non_flagged_data, flagged_data, self.categorical_cols, self.numerical_cols, len(data)
+            print(rating_data.head())
+            return rating_data
 
         except Exception as e:
-            print(f"An error occurred during preprocessing: {e}")
-            return None, None, None, None, None
+            print(f"Error processing Rating {rating}: {e}")
+            return pd.DataFrame()
 
 
-# Example Usage
-if __name__ == "__main__":
-    # Example DataFrame
-    df = pd.DataFrame({
-        'IndustryLevel3': ['A', 'B', 'A', None],
-        'Subordination': ['Senior', 'Junior', None, 'Senior'],
-        'BreakEvenSpread': [12.5, None, 150.0, 5.5],
-        'DerivedRating': ['AAA', 'WR', 'NR', None],
-        'MaturityDate': ['2025-01-01', '2023-06-01', None, '2024-12-01'],
-        'RevalDate': ['2023-01-01', '2023-01-01', '2023-01-01', None],
-        'Product': ['Bond', 'Loan', 'Bond', 'Loan'],
-        'RegionofDomicile': ['NA', 'EU', 'APAC', None],
-        'Cusip': ['123', '456', '123', '789'],
-        'CDCur': ['USD', 'EUR', 'USD', 'JPY']
-    })
+class ParallelModelRunner:
+    def __init__(self, numerical_cols: list[str], categorical_cols: list[str]):
+        self.processor = RatingProcessor(numerical_cols, categorical_cols)
 
-    # Convert date columns to datetime
-    df['MaturityDate'] = pd.to_datetime(df['MaturityDate'])
-    df['RevalDate'] = pd.to_datetime(df['RevalDate'])
+    def run(self, data: pd.DataFrame, flagged_data: pd.DataFrame) -> pd.DataFrame:
+        """Runs models in parallel for all ratings."""
+        unique_ratings = data["Rating"].unique()
+        outliers = pd.DataFrame()
 
-    # Instantiate the preprocessor
-    preprocessor = DataPreprocessor()
+        # Use ThreadPoolExecutor for parallel processing
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(self.processor.process_rating, data, rating): rating
+                for rating in unique_ratings
+            }
 
-    # Required and model columns
-    required_columns = [
-        'IndustryLevel3', 'Subordination', 'BreakEvenSpread', 'DerivedRating',
-        'MaturityDate', 'RevalDate', 'Product', 'RegionofDomicile', 'Cusip', 'CDCur'
-    ]
-    model_columns = ['IndustryLevel3', 'Subordination', 'BreakEvenSpread', 'MaturityDate', 'DerivedRating']
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    outliers = pd.concat([outliers, result], ignore_index=True)
+                except Exception as e:
+                    print(f"Error processing rating {futures[future]}: {e}")
 
-    # Preprocess the data
-    non_flagged, flagged, updated_categorical, updated_numerical, data_length = preprocessor.preprocess_data(
-        df, required_columns, model_columns
-    )
-
-    print("\nNon-Flagged Data:")
-    print(non_flagged)
-    print("\nFlagged Data:")
-    print(flagged)
-    print("\nData Length:", data_length)
+        # Combine outliers with flagged data
+        final_result = pd.concat([outliers, flagged_data]).reset_index(drop=True)
+        return final_result
