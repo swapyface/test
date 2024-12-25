@@ -1,126 +1,103 @@
-# Mock `qztable` and `sandra` library imports for this example
-class qztable:
-    class Schema:
-        def __init__(self, columns: List[str], types: List[str]):
-            self.columns = columns
-            self.types = types
+import pandas as pd
+import numpy as np
 
-    class Table:
-        def __init__(self, schema):
-            self.schema = schema
-            self.data = []
-
-        def append(self, data):
-            self.data.extend(data)
-
-
-class sandra:
-    class ConnectionError(Exception):
-        pass
-
-    class UploadError(Exception):
-        pass
-
-    @staticmethod
-    def connect(dbname: str):
-        # Mock connection
-        return "connection_object"
-
-    @staticmethod
-    def update_or_new(container_path: str, data_path: str, col_data):
-        # Mock upload logic
-        pass
-
-
-# Utility class to handle DataFrame to qztable conversion
-class QZTableConverter:
-    """
-    Utility class for converting a pandas DataFrame into a qztable object.
-    """
-    TYPE_MAPPING = {
-        "float64": "double",
-        "int64": "Int32",
-        "datetime64[ns]": "time",
-    }
-
-    @staticmethod
-    def dataframe_to_qztable(df: pd.DataFrame) -> qztable.Table:
+class DataPreprocessor:
+    def __init__(self, categorical_cols=None, numerical_cols=None):
         """
-        Converts a pandas DataFrame into a qztable.Table object.
-        
-        Args:
-            df (pd.DataFrame): The input DataFrame.
-        
-        Returns:
-            qztable.Table: The resulting qztable.Table object.
+        Initialize the DataPreprocessor with specified columns.
+
+        :param categorical_cols: List of categorical column names.
+        :param numerical_cols: List of numerical column names.
         """
-        # Map DataFrame dtypes to qztable types
-        types = [QZTableConverter.TYPE_MAPPING.get(str(dtype), "string") for dtype in df.dtypes]
-        columns = df.columns.tolist()
+        self.categorical_cols = categorical_cols or []
+        self.numerical_cols = numerical_cols or []
 
-        # Create qztable schema and populate table
-        schema = qztable.Schema(columns, types)
-        qzt = qztable.Table(schema)
-        qzt.append(df.values.tolist())
-        return qzt
-
-
-# Class to handle database operations
-class SandraUploader:
-    """
-    Handles operations related to uploading data to Sandra database.
-    """
-    def __init__(self, dbname: str):
+    def preprocess_dates(self, data: pd.DataFrame, date_columns: list) -> pd.DataFrame:
         """
-        Initializes the SandraUploader with the database name.
+        Convert specified columns to datetime format.
 
-        Args:
-            dbname (str): The database name.
+        :param data: Input DataFrame.
+        :param date_columns: List of date column names to convert.
+        :return: DataFrame with converted date columns.
         """
-        self.dbname = dbname
-        self.connection = None
+        for col in date_columns:
+            data[col] = pd.to_datetime(data[col], errors='coerce')
+        return data
 
-    def connect(self):
+    def calculate_time_to_maturity(self, data: pd.DataFrame, maturity_col: str, reval_col: str, output_col: str) -> pd.DataFrame:
         """
-        Connects to the Sandra database.
+        Calculate the time to maturity in days.
+
+        :param data: Input DataFrame.
+        :param maturity_col: Column name for maturity date.
+        :param reval_col: Column name for revaluation date.
+        :param output_col: Column name to store the result.
+        :return: DataFrame with calculated time to maturity.
         """
-        try:
-            self.connection = sandra.connect(self.dbname)
-        except sandra.ConnectionError:
-            raise Exception("Error: Unable to connect to the database.")
+        data[output_col] = (data[maturity_col] - data[reval_col]).dt.days
+        return data
 
-    def upload_result(self, result: pd.DataFrame, start_date: datetime, end_date: datetime) -> str:
+    def flag_outliers(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Uploads the DataFrame result to Sandra database.
+        Flag outliers based on categorical and numerical column rules.
 
-        Args:
-            result (pd.DataFrame): The DataFrame to be uploaded.
-            start_date (datetime): The start date of the data.
-            end_date (datetime): The end date of the data.
-
-        Returns:
-            str: Success message or error details.
+        :param data: Input DataFrame.
+        :return: DataFrame with ISO_result and Comment columns indicating outliers.
         """
-        try:
-            # Convert DataFrame to qztable
-            qz_table = QZTableConverter.dataframe_to_qztable(result)
+        data['ISO_result'] = 'Valid'
+        data['Comment'] = ''
 
-            # Upload to Sandra
-            container_path = f"/Credit/RiskBatch/BreakEvenSpread/result"
-            file_name = f"ISOresult_from_{start_date.date()}_to_{end_date.date()}"
-            full_path = container_path + "/" + file_name
-            sandra.update_or_new(container_path, full_path, qz_table)
+        # Handle categorical columns
+        for col in self.categorical_cols:
+            if col in data.columns:
+                invalid_values = ['WR', 'NR', 'Undefined', 'Unknown']
+                mask = data[col].isin(invalid_values) | data[col].isna()
+                data.loc[mask, 'ISO_result'] = 'Exclude'
+                data.loc[mask, 'Comment'] += f'{col} contains invalid value. '
 
-            # Save result locally as CSV
-            result.to_csv(
-                f"C:/Users/zkjrumk/Desktop/ml_project/BreakEvenSpreadOutlierDetection/Datasets/{file_name}.csv", 
-                index=False
-            )
+        # Handle numerical columns
+        for col in self.numerical_cols:
+            if col in data.columns:
+                mask_high = data[col] > 10000
+                mask_low = data[col] < 10
+                mask_nan = data[col].isna()
+                data.loc[mask_high | mask_low | mask_nan, 'ISO_result'] = 'Exclude'
+                data.loc[mask_high, 'Comment'] += f'{col} is too high. '
+                data.loc[mask_low, 'Comment'] += f'{col} is too low. '
+                data.loc[mask_nan, 'Comment'] += f'{col} is missing. '
 
-            return f"Result uploaded to Sandra location: {full_path}"
-        except sandra.ConnectionError:
-            return "Error: Unable to connect to the database."
-        except sandra.UploadError:
-            return "Error: File upload failed. Please check the file format or database permissions."
-        except Exception as e:
-            return f"An unexpected error occurred: {str(e)}"
+        return data
+
+# Example Usage
+if __name__ == "__main__":
+    # Sample DataFrame
+    df = pd.DataFrame({
+        'IndustryLevel3': ['A', 'B', 'A', None],
+        'Subordination': ['Senior', 'Junior', None, 'Senior'],
+        'BreakEvenSpread': [12.5, None, 150.0, 5.5],
+        'DerivedRating': ['AAA', 'WR', 'NR', None],
+        'MaturityDate': ['2025-01-01', '2023-06-01', None, '2024-12-01'],
+        'RevalDate': ['2023-01-01', '2023-01-01', '2023-01-01', None],
+        'Product': ['Bond', 'Loan', 'Bond', 'Loan'],
+        'RegionofDomicile': ['NA', 'EU', 'APAC', None],
+        'Cusip': ['123', '456', '123', '789'],
+        'CDCur': ['USD', 'EUR', 'USD', 'JPY']
+    })
+
+    # Initialize preprocessor
+    preprocessor = DataPreprocessor(
+        categorical_cols=['DerivedRating', 'Subordination', 'RegionofDomicile'],
+        numerical_cols=['BreakEvenSpread']
+    )
+
+    # Preprocess date columns
+    df = preprocessor.preprocess_dates(df, ['MaturityDate', 'RevalDate'])
+
+    # Calculate time to maturity
+    df = preprocessor.calculate_time_to_maturity(df, 'MaturityDate', 'RevalDate', 'TimeToMaturity')
+
+    # Flag outliers
+    df = preprocessor.flag_outliers(df)
+
+    # Display the final DataFrame
+    print(df)
