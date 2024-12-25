@@ -1,123 +1,170 @@
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
-from sklearn.ensemble import IsolationForest
-from concurrent.futures import ThreadPoolExecutor, as_completed
+# ingestion.py
+
+from datetime import datetime, timedelta
 import pandas as pd
-import numpy as np
-from typing import Dict, Any
+from typing import List, Dict, Any, Optional
 
+class Filter:
+    """Represents a filter for querying data."""
+    def __init__(self, operator: str, variable: str, value: str, sub_expressions: Optional[List[Any]] = None):
+        self.operator = operator
+        self.variable = variable
+        self.value = value
+        self.sub_expressions = sub_expressions
 
-class DataEncoder:
-    def __init__(self, numerical_cols: list[str], categorical_cols: list[str]):
-        self.numerical_cols = numerical_cols
-        self.categorical_cols = categorical_cols
-        self.scaler = MinMaxScaler()
-        self.encoder = OneHotEncoder(sparse_output=False, drop="first")
-
-    def encode(self, data: pd.DataFrame) -> np.ndarray:
-        """Encodes the numerical and categorical columns in the dataset."""
-        # Scale numerical data
-        scaled_data = self.scaler.fit_transform(data[self.numerical_cols])
-
-        # Encode categorical data
-        encoded_categorical = self.encoder.fit_transform(data[self.categorical_cols])
-
-        # Combine encoded data
-        return np.hstack((encoded_categorical, scaled_data))
-
-
-class IsolationForestConfig:
-    @staticmethod
-    def get_parameters(dataset_size: int) -> Dict[str, Any]:
-        """Returns Isolation Forest parameters based on dataset size."""
-        if dataset_size < 100:
-            return {"n_estimators": 20, "max_samples": dataset_size, "contamination": 0.05, "max_features": 1.0}
-        elif 100 <= dataset_size < 500:
-            return {"n_estimators": 50, "max_samples": 100, "contamination": 0.05, "max_features": 1.0}
-        elif 500 <= dataset_size < 1000:
-            return {"n_estimators": 100, "max_samples": 256, "contamination": 0.05, "max_features": 1.0}
-        elif 1000 <= dataset_size < 5000:
-            return {"n_estimators": 300, "max_samples": 500, "contamination": 0.05, "max_features": 1.0}
-        elif 5000 <= dataset_size < 10000:
-            return {"n_estimators": 500, "max_samples": 1500, "contamination": 0.05, "max_features": 1.0}
-        elif 10000 <= dataset_size < 50000:
-            return {"n_estimators": 1000, "max_samples": 3000, "contamination": 0.05, "max_features": 1.0}
-        elif 50000 <= dataset_size < 100000:
-            return {"n_estimators": 1500, "max_samples": 5000, "contamination": 0.05, "max_features": 1.0}
-        elif 100000 <= dataset_size < 300000:
-            return {"n_estimators": 2000, "max_samples": 6000, "contamination": 0.05, "max_features": 1.0}
-        elif 300000 <= dataset_size < 500000:
-            return {"n_estimators": 5000, "max_samples": 15000, "contamination": 0.05, "max_features": 1.0}
-        elif 500000 <= dataset_size < 1000000:
-            return {"n_estimators": 7000, "max_samples": 20000, "contamination": 0.05, "max_features": 1.0}
-        else:
-            raise ValueError("Dataset size out of supported range.")
-
-
-class RatingProcessor:
-    def __init__(self, numerical_cols: list[str], categorical_cols: list[str]):
-        self.encoder = DataEncoder(numerical_cols, categorical_cols)
-
-    def process_rating(self, data: pd.DataFrame, rating: int) -> pd.DataFrame:
-        """Processes data for a specific rating."""
-        try:
-            print(f"Processing Rating: {rating}")
-
-            # Filter data for the specific rating
-            rating_data = data[data["Rating"] == rating]
-
-            # Get Isolation Forest parameters
-            params = IsolationForestConfig.get_parameters(len(rating_data))
-            print(f"Rating {rating} parameters: {params}")
-
-            # Initialize Isolation Forest model
-            iso_model = IsolationForest(
-                n_estimators=params["n_estimators"],
-                max_samples=params["max_samples"],
-                contamination=params["contamination"],
-                max_features=params["max_features"],
-                random_state=42,
-            )
-
-            # Encode data
-            X = self.encoder.encode(rating_data)
-
-            # Predict outliers
-            rating_data["ISO_result"] = iso_model.fit_predict(X)
-
-            # Replace -1 and 1 with "outlier" and "inlier"
-            rating_data["ISO_result"] = rating_data["ISO_result"].replace({-1: "outlier", 1: "inlier"})
-
-            print(rating_data.head())
-            return rating_data
-
-        except Exception as e:
-            print(f"Error processing Rating {rating}: {e}")
-            return pd.DataFrame()
-
-
-class ParallelModelRunner:
-    def __init__(self, numerical_cols: list[str], categorical_cols: list[str]):
-        self.processor = RatingProcessor(numerical_cols, categorical_cols)
-
-    def run(self, data: pd.DataFrame, flagged_data: pd.DataFrame) -> pd.DataFrame:
-        """Runs models in parallel for all ratings."""
-        unique_ratings = data["Rating"].unique()
-        outliers = pd.DataFrame()
-
-        # Use ThreadPoolExecutor for parallel processing
-        with ThreadPoolExecutor() as executor:
-            futures = {
-                executor.submit(self.processor.process_rating, data, rating): rating
-                for rating in unique_ratings
+    def to_dict(self) -> Dict:
+        """Convert the filter to a dictionary representation."""
+        if self.sub_expressions:
+            return {
+                'operator': self.operator,
+                'subExpressions': [expr.to_dict() for expr in self.sub_expressions]
             }
+        return {
+            'operator': self.operator,
+            'variable': self.variable,
+            'value': self.value
+        }
 
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                    outliers = pd.concat([outliers, result], ignore_index=True)
-                except Exception as e:
-                    print(f"Error processing rating {futures[future]}: {e}")
 
-        # Combine outliers with flagged data
-        final_result = pd.concat([outliers, flagged_data]).reset_index(drop=True)
-        return final_result
+class ReportField:
+    """Represents a report field for querying data."""
+    def __init__(self, col_name: str, func: str, label: str, is_distinct: Optional[bool] = False):
+        self.col_name = col_name
+        self.func = func
+        self.label = label
+        self.is_distinct = is_distinct
+
+    def to_dict(self) -> Dict:
+        """Convert the report field to a dictionary representation."""
+        return {
+            'colName': self.col_name,
+            'func': self.func,
+            'label': self.label,
+            'isDistinct': self.is_distinct
+        }
+
+
+class DataIngestion:
+    """Handles data ingestion and preprocessing."""
+
+    DATE_FORMAT = "%Y-%m-%d"
+
+    def __init__(self, env: str, snapshot: str, mandatory_cols: List[str], report_fields: List[Dict[str, Any]]):
+        self.env = env
+        self.snapshot = snapshot
+        self.mandatory_cols = mandatory_cols
+        self.report_fields = [ReportField(**field) for field in report_fields]
+
+    def for_date_series(self, num_days: int, formatted_end_date: datetime) -> List[str]:
+        """
+        Generate a series of business dates.
+
+        :param num_days: Number of days to generate.
+        :param formatted_end_date: The end date for the series.
+        :return: List of business dates as strings.
+        """
+        end_date = self.get_last_business_date(formatted_end_date)
+        start_date = end_date - timedelta(days=num_days - 1)
+        date_series = []
+        current_date = start_date
+        while current_date <= end_date:
+            if self.is_business_day(current_date):
+                date_series.append(current_date.strftime(self.DATE_FORMAT))
+            current_date += timedelta(days=1)
+        return date_series
+
+    @staticmethod
+    def get_last_business_date(date: datetime) -> datetime:
+        """
+        Get the last business day for a given date.
+
+        :param date: The input date.
+        :return: The last business date.
+        """
+        # Placeholder for logic to calculate the last business day.
+        return date
+
+    @staticmethod
+    def is_business_day(date: datetime) -> bool:
+        """
+        Check if a given date is a business day.
+
+        :param date: The input date.
+        :return: True if business day, False otherwise.
+        """
+        # Placeholder for checking business day logic.
+        return True
+
+    @staticmethod
+    def split_snapshots(snapshot_ids: List[str], chunk_size: int = 10) -> List[List[str]]:
+        """
+        Split a list of snapshot IDs into chunks.
+
+        :param snapshot_ids: List of snapshot IDs.
+        :param chunk_size: Maximum size of each chunk.
+        :return: List of chunks.
+        """
+        full_chunks = len(snapshot_ids) // chunk_size
+        remaining_elements = len(snapshot_ids) % chunk_size
+        chunks = [snapshot_ids[i * chunk_size: (i + 1) * chunk_size] for i in range(full_chunks)]
+        if remaining_elements > 0:
+            chunks.append(snapshot_ids[full_chunks * chunk_size:])
+        return chunks
+
+    def get_ingestion_data(self, input_start_date: datetime, input_end_date: datetime) -> pd.DataFrame:
+        """
+        Ingest data from an API and return a pandas DataFrame.
+
+        :param input_start_date: Start date for data ingestion.
+        :param input_end_date: End date for data ingestion.
+        :return: Data as a pandas DataFrame.
+        """
+        master_table = None
+        snapshot_ids = []
+        num_of_days = (input_end_date - input_start_date).days
+
+        formatted_end_date = datetime.strptime(
+            f"{input_end_date.year}-{input_end_date.month}-{input_end_date.day}", "%Y-%m-%d"
+        )
+
+        # Generate date series
+        for batch_date in self.for_date_series(num_of_days, formatted_end_date):
+            snapshot_id = self.fetch_snapshot_id(batch_date)
+            snapshot_ids.append(snapshot_id)
+
+        # Split snapshot IDs into manageable chunks
+        snapshot_id_chunks = self.split_snapshots(snapshot_ids)
+
+        # Fetch data in chunks
+        for chunk in snapshot_id_chunks:
+            table = self.fetch_data(chunk)
+            if master_table is None:
+                master_table = table
+            else:
+                master_table = master_table.vConcat(table)
+
+        # Convert to DataFrame
+        return pd.DataFrame(master_table, columns=master_table.columnNames())
+
+    def fetch_snapshot_id(self, date: str) -> str:
+        """
+        Fetch snapshot ID for a given date.
+
+        :param date: Date in string format.
+        :return: Snapshot ID.
+        """
+        # Placeholder for API call to fetch snapshot ID
+        return f"SnapshotID_{date}"
+
+    def fetch_data(self, snapshot_ids: List[str]) -> Any:
+        """
+        Fetch data for the given snapshot IDs.
+
+        :param snapshot_ids: List of snapshot IDs.
+        :return: Data table.
+        """
+        # Placeholder for API call to fetch data
+        return {
+            "columns": self.mandatory_cols,
+            "rows": []
+        }
