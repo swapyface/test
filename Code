@@ -1,178 +1,126 @@
-# ingestion.py
+# Mock `qztable` and `sandra` library imports for this example
+class qztable:
+    class Schema:
+        def __init__(self, columns: List[str], types: List[str]):
+            self.columns = columns
+            self.types = types
 
-from datetime import datetime, timedelta
-import pandas as pd
-from typing import List, Dict, Any, Optional
+    class Table:
+        def __init__(self, schema):
+            self.schema = schema
+            self.data = []
 
-class Filter:
-    """Represents a filter for querying data."""
-    def __init__(self, operator: str, variable: str, value: str, sub_expressions: Optional[List[Any]] = None):
-        self.operator = operator
-        self.variable = variable
-        self.value = value
-        self.sub_expressions = sub_expressions
-
-    def to_dict(self) -> Dict:
-        """Convert the filter to a dictionary representation."""
-        if self.sub_expressions:
-            return {
-                'operator': self.operator,
-                'subExpressions': [expr.to_dict() for expr in self.sub_expressions]
-            }
-        return {
-            'operator': self.operator,
-            'variable': self.variable,
-            'value': self.value
-        }
+        def append(self, data):
+            self.data.extend(data)
 
 
-class ReportField:
-    """Represents a report field for querying data."""
-    def __init__(self, col_name: str, func: str, label: str, is_distinct: Optional[bool] = False):
-        self.col_name = col_name
-        self.func = func
-        self.label = label
-        self.is_distinct = is_distinct
+class sandra:
+    class ConnectionError(Exception):
+        pass
 
-    def to_dict(self) -> Dict:
-        """Convert the report field to a dictionary representation."""
-        return {
-            'colName': self.col_name,
-            'func': self.func,
-            'label': self.label,
-            'isDistinct': self.is_distinct
-        }
-
-
-class DataIngestion:
-    """Handles data ingestion and preprocessing."""
-
-    DATE_FORMAT = "%Y-%m-%d"
-
-    def __init__(self, env: str = 'prod', snapshot: str = 'OFFICIAL', mandatory_cols: List[str] = None, report_fields: List[Dict[str, Any]] = None):
-        """
-        Initialize the DataIngestion class.
-
-        :param env: Environment name (e.g., 'prod', 'dev').
-        :param snapshot: Snapshot type (e.g., 'OFFICIAL').
-        :param mandatory_cols: List of mandatory columns for the data.
-        :param report_fields: List of report field definitions.
-        """
-        self.env = env
-        self.snapshot = snapshot
-        self.mandatory_cols = mandatory_cols or []
-        self.report_fields = [ReportField(**field) for field in (report_fields or [])]
-
-    def for_date_series(self, num_days: int, formatted_end_date: datetime) -> List[str]:
-        """
-        Generate a series of business dates.
-
-        :param num_days: Number of days to generate.
-        :param formatted_end_date: The end date for the series.
-        :return: List of business dates as strings.
-        """
-        end_date = self.get_last_business_date(formatted_end_date)
-        start_date = end_date - timedelta(days=num_days - 1)
-        date_series = []
-        current_date = start_date
-        while current_date <= end_date:
-            if self.is_business_day(current_date):
-                date_series.append(current_date.strftime(self.DATE_FORMAT))
-            current_date += timedelta(days=1)
-        return date_series
+    class UploadError(Exception):
+        pass
 
     @staticmethod
-    def get_last_business_date(date: datetime) -> datetime:
-        """
-        Get the last business day for a given date.
-
-        :param date: The input date.
-        :return: The last business date.
-        """
-        # Placeholder for logic to calculate the last business day.
-        return date
+    def connect(dbname: str):
+        # Mock connection
+        return "connection_object"
 
     @staticmethod
-    def is_business_day(date: datetime) -> bool:
-        """
-        Check if a given date is a business day.
+    def update_or_new(container_path: str, data_path: str, col_data):
+        # Mock upload logic
+        pass
 
-        :param date: The input date.
-        :return: True if business day, False otherwise.
-        """
-        # Placeholder for checking business day logic.
-        return True
+
+# Utility class to handle DataFrame to qztable conversion
+class QZTableConverter:
+    """
+    Utility class for converting a pandas DataFrame into a qztable object.
+    """
+    TYPE_MAPPING = {
+        "float64": "double",
+        "int64": "Int32",
+        "datetime64[ns]": "time",
+    }
 
     @staticmethod
-    def split_snapshots(snapshot_ids: List[str], chunk_size: int = 10) -> List[List[str]]:
+    def dataframe_to_qztable(df: pd.DataFrame) -> qztable.Table:
         """
-        Split a list of snapshot IDs into chunks.
-
-        :param snapshot_ids: List of snapshot IDs.
-        :param chunk_size: Maximum size of each chunk.
-        :return: List of chunks.
+        Converts a pandas DataFrame into a qztable.Table object.
+        
+        Args:
+            df (pd.DataFrame): The input DataFrame.
+        
+        Returns:
+            qztable.Table: The resulting qztable.Table object.
         """
-        full_chunks = len(snapshot_ids) // chunk_size
-        remaining_elements = len(snapshot_ids) % chunk_size
-        chunks = [snapshot_ids[i * chunk_size: (i + 1) * chunk_size] for i in range(full_chunks)]
-        if remaining_elements > 0:
-            chunks.append(snapshot_ids[full_chunks * chunk_size:])
-        return chunks
+        # Map DataFrame dtypes to qztable types
+        types = [QZTableConverter.TYPE_MAPPING.get(str(dtype), "string") for dtype in df.dtypes]
+        columns = df.columns.tolist()
 
-    def get_ingestion_data(self, input_start_date: datetime, input_end_date: datetime) -> pd.DataFrame:
+        # Create qztable schema and populate table
+        schema = qztable.Schema(columns, types)
+        qzt = qztable.Table(schema)
+        qzt.append(df.values.tolist())
+        return qzt
+
+
+# Class to handle database operations
+class SandraUploader:
+    """
+    Handles operations related to uploading data to Sandra database.
+    """
+    def __init__(self, dbname: str):
         """
-        Ingest data from an API and return a pandas DataFrame.
+        Initializes the SandraUploader with the database name.
 
-        :param input_start_date: Start date for data ingestion.
-        :param input_end_date: End date for data ingestion.
-        :return: Data as a pandas DataFrame.
+        Args:
+            dbname (str): The database name.
         """
-        master_table = None
-        snapshot_ids = []
-        num_of_days = (input_end_date - input_start_date).days
+        self.dbname = dbname
+        self.connection = None
 
-        formatted_end_date = datetime.strptime(
-            f"{input_end_date.year}-{input_end_date.month}-{input_end_date.day}", "%Y-%m-%d"
-        )
-
-        # Generate date series
-        for batch_date in self.for_date_series(num_of_days, formatted_end_date):
-            snapshot_id = self.fetch_snapshot_id(batch_date)
-            snapshot_ids.append(snapshot_id)
-
-        # Split snapshot IDs into manageable chunks
-        snapshot_id_chunks = self.split_snapshots(snapshot_ids)
-
-        # Fetch data in chunks
-        for chunk in snapshot_id_chunks:
-            table = self.fetch_data(chunk)
-            if master_table is None:
-                master_table = table
-            else:
-                master_table = master_table.vConcat(table)
-
-        # Convert to DataFrame
-        return pd.DataFrame(master_table, columns=master_table.columnNames())
-
-    def fetch_snapshot_id(self, date: str) -> str:
+    def connect(self):
         """
-        Fetch snapshot ID for a given date.
-
-        :param date: Date in string format.
-        :return: Snapshot ID.
+        Connects to the Sandra database.
         """
-        # Placeholder for API call to fetch snapshot ID
-        return f"SnapshotID_{date}"
+        try:
+            self.connection = sandra.connect(self.dbname)
+        except sandra.ConnectionError:
+            raise Exception("Error: Unable to connect to the database.")
 
-    def fetch_data(self, snapshot_ids: List[str]) -> Any:
+    def upload_result(self, result: pd.DataFrame, start_date: datetime, end_date: datetime) -> str:
         """
-        Fetch data for the given snapshot IDs.
+        Uploads the DataFrame result to Sandra database.
 
-        :param snapshot_ids: List of snapshot IDs.
-        :return: Data table.
+        Args:
+            result (pd.DataFrame): The DataFrame to be uploaded.
+            start_date (datetime): The start date of the data.
+            end_date (datetime): The end date of the data.
+
+        Returns:
+            str: Success message or error details.
         """
-        # Placeholder for API call to fetch data
-        return {
-            "columns": self.mandatory_cols,
-            "rows": []
-        }
+        try:
+            # Convert DataFrame to qztable
+            qz_table = QZTableConverter.dataframe_to_qztable(result)
+
+            # Upload to Sandra
+            container_path = f"/Credit/RiskBatch/BreakEvenSpread/result"
+            file_name = f"ISOresult_from_{start_date.date()}_to_{end_date.date()}"
+            full_path = container_path + "/" + file_name
+            sandra.update_or_new(container_path, full_path, qz_table)
+
+            # Save result locally as CSV
+            result.to_csv(
+                f"C:/Users/zkjrumk/Desktop/ml_project/BreakEvenSpreadOutlierDetection/Datasets/{file_name}.csv", 
+                index=False
+            )
+
+            return f"Result uploaded to Sandra location: {full_path}"
+        except sandra.ConnectionError:
+            return "Error: Unable to connect to the database."
+        except sandra.UploadError:
+            return "Error: File upload failed. Please check the file format or database permissions."
+        except Exception as e:
+            return f"An unexpected error occurred: {str(e)}"
