@@ -1,11 +1,1 @@
-# Assuming you have a DataFrame named 'df'
-grouped_data = {rating: group for rating, group in df.groupby('rating')}
 
-# Now you have a dictionary where the keys are the ratings, 
-# and the values are the DataFrames for each rating.
-
-# For example, to access the DataFrame for a specific rating, e.g., 'A':
-df_A = grouped_data['A']
-
-# Display the DataFrame for 'A'
-print(df_A)
