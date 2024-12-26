@@ -1,13 +1,1 @@
-import pandas as pd
 
-# Sample dataframe
-data = {
-    'iso-result': ['inlier', 'outlier', 'excluded', 'inlier', 'inlier', 'outlier'],
-    'value': [10, 20, 30, 40, 50, 60]
-}
-df = pd.DataFrame(data)
-
-# Drop rows where 'iso-result' contains 'excluded' or 'outlier'
-filtered_df = df[~df['iso-result'].isin(['excluded', 'outlier'])]
-
-print(filtered_df)
