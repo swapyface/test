@@ -1,1 +1,30 @@
 
+# main.py
+from datetime import datetime
+from ingestion import DataIngestion
+
+# Define mandatory columns dynamically
+mandatory_columns = [
+    'DerivedRating', 'CDCurve', 'Ticker', 'Subordination', 'MaturityDate',
+    'BreakEvenSpread', 'RevalDate', 'Cusip', 'IndustryLevel3', 'Product'
+]
+
+# Initialize DataIngestion
+data_ingestion = DataIngestion(
+    env='prod',
+    snapshot='OFFICIAL',
+    report_fields=[
+        {"colName": "Snapshots.CobDate", "func": "DIM", "label": "RevalDate"},
+        {"colName": "Snapshots.SnapshotID", "func": "DIM", "isDistinct": False, "label": "SnapshotID"}
+        # Add other report fields here
+    ]
+)
+
+# Fetch data dynamically with mandatory columns
+start_date = datetime(2024, 12, 1)
+end_date = datetime(2024, 12, 25)
+
+df = data_ingestion.get_ingestion_data(start_date, end_date, mandatory_columns)
+
+# Print or process the resulting DataFrame
+print(df)
