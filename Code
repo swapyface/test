@@ -1,8 +1,27 @@
-uploader = SandraUploader(dbname="credit_qa")
-    
-    try:
-        uploader.connect()  # Connect to the database
-        message = uploader.upload_result(result=df, start_date=start_date, end_date=end_date)
-        print(message)  # Print success message
-    except Exception as e:
-        print(f"Error during upload: {e}")
+import pickle
+import pandas as pd
+
+# Load Preprocessing, Model, and Parameters
+with open("preprocessing.pkl", "rb") as f:
+    scaler = pickle.load(f)
+
+with open("model.pkl", "rb") as f:
+    iso_model = pickle.load(f)
+
+with open("parameters.pkl", "rb") as f:
+    required_columns = pickle.load(f)
+
+# Use the loaded files
+print("Required Columns:", required_columns)
+
+# Example Data (replace with real input)
+test_data = pd.DataFrame({
+    "column1": [2],
+    "column2": [5],
+    "column3": [8]
+})
+
+# Preprocess and Predict
+scaled_test_data = scaler.transform(test_data[required_columns])
+predictions = iso_model.predict(scaled_test_data)
+print("Predictions:", predictions)
