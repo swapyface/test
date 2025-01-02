@@ -1,1 +1,35 @@
 
+import pickle
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+
+# 1. Required Columns
+required_columns = ["column1", "column2", "column3"]  # Replace with your actual column names
+
+# 2. Sample Data (Replace with your actual data)
+data = pd.DataFrame({
+    "column1": [1, 2, 3],
+    "column2": [4, 5, 6],
+    "column3": [7, 8, 9]
+})
+
+# 3. Preprocessing Steps
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(data[required_columns])
+
+# 4. Isolation Forest Model
+iso_model = IsolationForest(n_estimators=100, random_state=42)
+iso_model.fit(scaled_data)
+
+# 5. Save Preprocessing, Model, and Parameters
+with open("preprocessing.pkl", "wb") as f:
+    pickle.dump(scaler, f)
+
+with open("model.pkl", "wb") as f:
+    pickle.dump(iso_model, f)
+
+with open("parameters.pkl", "wb") as f:
+    pickle.dump(required_columns, f)
+
+print("Preprocessing, model, and parameters have been saved successfully!")
