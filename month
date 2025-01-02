@@ -1,1 +1,67 @@
 
+import pickle
+import hashlib
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+
+# Example list (required_columns in this case)
+required_columns = ["column1", "column2", "column3"]
+
+# Save the hash of the list to a file for change detection
+def calculate_hash(obj):
+    """Calculate a hash for a Python object."""
+    return hashlib.sha256(pickle.dumps(obj)).hexdigest()
+
+def get_saved_hash(filename="hash_file.txt"):
+    """Get the saved hash from a file."""
+    try:
+        with open(filename, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
+def save_current_hash(hash_value, filename="hash_file.txt"):
+    """Save the current hash to a file."""
+    with open(filename, "w") as f:
+        f.write(hash_value)
+
+# Compare the hash of the list
+current_hash = calculate_hash(required_columns)
+saved_hash = get_saved_hash()
+
+# If the list has changed, rebuild the pipeline
+if current_hash != saved_hash:
+    print("Change detected in the list. Training pipeline will run.")
+    
+    # Example data for training
+    data = pd.DataFrame({
+        "column1": [1, 2, 3],
+        "column2": [4, 5, 6],
+        "column3": [7, 8, 9]
+    })
+
+    # Preprocessing
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(data[required_columns])
+
+    # Train Isolation Forest Model
+    iso_model = IsolationForest(n_estimators=100, random_state=42)
+    iso_model.fit(scaled_data)
+
+    # Save updated objects in a single pickle file
+    objects_to_save = {
+        "preprocessing": scaler,
+        "model": iso_model,
+        "required_columns": required_columns
+    }
+
+    with open("all_objects.pkl", "wb") as f:
+        pickle.dump(objects_to_save, f)
+
+    # Save the current hash
+    save_current_hash(current_hash)
+
+    print("Pipeline trained and objects saved successfully!")
+else:
+    print("No changes detected in the list. Existing pipeline is up-to-date.")
