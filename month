@@ -1,67 +1,83 @@
-
 import pickle
+import os
+import sqlite3
+from datetime import datetime
 import hashlib
-import pandas as pd
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
+from main import my_list, other_object
 
-# Example list (required_columns in this case)
-required_columns = ["column1", "column2", "column3"]
+# Database file
+DB_FILE = "hash_store.db"
 
-# Save the hash of the list to a file for change detection
-def calculate_hash(obj):
-    """Calculate a hash for a Python object."""
-    return hashlib.sha256(pickle.dumps(obj)).hexdigest()
+# Function to compute hash of an object
+def compute_hash(obj):
+    return hashlib.md5(str(obj).encode()).hexdigest()
 
-def get_saved_hash(filename="hash_file.txt"):
-    """Get the saved hash from a file."""
-    try:
-        with open(filename, "r") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return None
+# Function to create or connect to the database
+def setup_database():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hash_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    return conn
 
-def save_current_hash(hash_value, filename="hash_file.txt"):
-    """Save the current hash to a file."""
-    with open(filename, "w") as f:
-        f.write(hash_value)
+# Function to get the latest hash from the database
+def get_latest_hash(conn):
+    cursor = conn.cursor()
+    cursor.execute("SELECT hash FROM hash_data ORDER BY created_at DESC LIMIT 1")
+    result = cursor.fetchone()
+    return result[0] if result else None
 
-# Compare the hash of the list
-current_hash = calculate_hash(required_columns)
-saved_hash = get_saved_hash()
+# Function to store a new hash in the database
+def store_hash(conn, hash_value):
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO hash_data (hash) VALUES (?)", (hash_value,))
+    conn.commit()
 
-# If the list has changed, rebuild the pipeline
-if current_hash != saved_hash:
-    print("Change detected in the list. Training pipeline will run.")
-    
-    # Example data for training
-    data = pd.DataFrame({
-        "column1": [1, 2, 3],
-        "column2": [4, 5, 6],
-        "column3": [7, 8, 9]
-    })
+# Function to create a new pickle file
+def create_pickle_file(objects):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"data_{timestamp}.pkl"
+    with open(filename, "wb") as f:
+        pickle.dump(objects, f)
+    print(f"New pickle file created: {filename}")
 
-    # Preprocessing
-    scaler = StandardScaler()
-    scaled_data = scaler.fit_transform(data[required_columns])
+# Main process
+def main():
+    conn = setup_database()
 
-    # Train Isolation Forest Model
-    iso_model = IsolationForest(n_estimators=100, random_state=42)
-    iso_model.fit(scaled_data)
+    # Get the list and objects from main.py
+    objects = {"my_list": my_list, "other_object": other_object}
 
-    # Save updated objects in a single pickle file
-    objects_to_save = {
-        "preprocessing": scaler,
-        "model": iso_model,
-        "required_columns": required_columns
-    }
+    # Compute the current hash
+    current_hash = compute_hash(objects)
 
-    with open("all_objects.pkl", "wb") as f:
-        pickle.dump(objects_to_save, f)
+    # Get the latest stored hash from the database
+    stored_hash = get_latest_hash(conn)
 
-    # Save the current hash
-    save_current_hash(current_hash)
+    if not stored_hash:
+        print("No hash found in the database. First-time setup.")
+        # Store the new hash in the database
+        store_hash(conn, current_hash)
 
-    print("Pipeline trained and objects saved successfully!")
-else:
-    print("No changes detected in the list. Existing pipeline is up-to-date.")
+        # Create a pickle file
+        create_pickle_file(objects)
+    elif current_hash != stored_hash:
+        print("Hashes do not match. Updating the hash and creating a new pickle file...")
+        # Store the new hash in the database
+        store_hash(conn, current_hash)
+
+        # Create a new pickle file
+        create_pickle_file(objects)
+    else:
+        print("Hashes match. No new pickle file created.")
+
+    conn.close()
+
+if __name__ == "__main__":
+    main()
