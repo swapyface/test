@@ -1,33 +1,34 @@
-import pickle
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-import pandas as pd
+def get_parameters_for_size(dataset_size: int, all_parameters: dict):
+    """
+    Dynamically retrieves the appropriate parameters for a given dataset size.
+    :param dataset_size: int - Size of the dataset
+    :param all_parameters: dict - Dictionary of all parameters
+    :return: dict - Matching parameters
+    """
+    if dataset_size < 100:
+        return all_parameters["size < 100"]
+    elif 100 < dataset_size <= 500:
+        return all_parameters["100 < size <= 500"]
+    elif 500 < dataset_size <= 1000:
+        return all_parameters["500 < size <= 1000"]
+    elif 1000 < dataset_size <= 5000:
+        return all_parameters["1000 < size <= 5000"]
+    elif 5000 < dataset_size <= 10000:
+        return all_parameters["5000 < size <= 10000"]
+    elif 10000 < dataset_size <= 50000:
+        return all_parameters["10000 < size <= 50000"]
+    elif 50000 < dataset_size <= 100000:
+        return all_parameters["50000 < size <= 100000"]
+    elif 100000 < dataset_size <= 300000:
+        return all_parameters["100000 < size <= 300000"]
+    elif 300000 < dataset_size <= 500000:
+        return all_parameters["300000 < size <= 500000"]
+    elif 500000 < dataset_size <= 1000000:
+        return all_parameters["500000 < size <= 1000000"]
+    else:
+        raise ValueError("Dataset size exceeds the defined range.")
 
-# Example Data and Preprocessing
-required_columns = ["column1", "column2", "column3"]
-data = pd.DataFrame({
-    "column1": [1, 2, 3],
-    "column2": [4, 5, 6],
-    "column3": [7, 8, 9]
-})
-
-# Preprocessing
-scaler = StandardScaler()
-scaled_data = scaler.fit_transform(data[required_columns])
-
-# Isolation Forest Model
-iso_model = IsolationForest(n_estimators=100, random_state=42)
-iso_model.fit(scaled_data)
-
-# Combine all objects into a dictionary
-objects_to_save = {
-    "preprocessing": scaler,
-    "model": iso_model,
-    "required_columns": required_columns
-}
-
-# Save all objects to a single pickle file
-with open("all_objects.pkl", "wb") as f:
-    pickle.dump(objects_to_save, f)
-
-print("All objects have been saved into one pickle file!")
+# Example usage
+dataset_size = 75000
+parameters = get_parameters_for_size(dataset_size, loaded_parameters)
+print(f"Parameters for dataset size {dataset_size}: {parameters}")
