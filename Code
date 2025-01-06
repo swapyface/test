@@ -1,4 +1,4 @@
-import pickle
+yimport pickle
 import pandas as pd
 
 # Load Preprocessing, Model, and Parameters
@@ -61,5 +61,18 @@ additional_config = loaded_parameters.get("additional_config", {})
 print("Required Columns:", required_columns)
 print("Model Parameters:", model_params)
 print("Additional Config:", additional_config)
+from datetime import datetime
 
+# Get current date and time
+current_time = datetime.now()
+
+# Format the variable name (e.g., 'variable_2024_12_31_123456')
+variable_name = f"variable_{current_time.strftime('%Y_%m_%d_%H%M%S')}"
+
+# Create a variable with the generated name dynamically
+globals()[variable_name] = "This is the value of the dynamically created variable"
+
+# Access the variable dynamically
+print(f"Variable name: {variable_name}")
+print(f"Variable value: {globals()[variable_name]}")
 
