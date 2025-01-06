@@ -48,3 +48,18 @@ print("Loaded Parameters:")
 for key, value in loaded_parameters.items():
     print(f"{key}: {value}")
 
+# Load parameters from pickle
+with open("all_parameters.pkl", "rb") as f:
+    loaded_parameters = pickle.load(f)
+
+# Dynamically assign specific keys to variables
+required_columns = loaded_parameters.get("required_columns", [])
+model_params = loaded_parameters.get("model_params", {})
+additional_config = loaded_parameters.get("additional_config", {})
+
+# Print the variables
+print("Required Columns:", required_columns)
+print("Model Parameters:", model_params)
+print("Additional Config:", additional_config)
+
+
