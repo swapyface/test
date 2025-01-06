@@ -39,3 +39,12 @@ all_parameters = {
     "300000 < size <= 500000": {"n_estimators": 5000, "max_samples": 15000, "contamination": 0.05, "max_features": 1.0},
     "500000 < size <= 1000000": {"n_estimators": 7000, "max_samples": 20000, "contamination": 0.05, "max_features": 1.0}
 }
+
+# Load the parameters dictionary from the pickle file
+with open("all_model_parameters.pkl", "rb") as f:
+    loaded_parameters = pickle.load(f)
+
+print("Loaded Parameters:")
+for key, value in loaded_parameters.items():
+    print(f"{key}: {value}")
+
