@@ -1,83 +1,60 @@
-import pickle
-import os
-import sqlite3
+# File: date_input_ui.py
+import tkinter as tk
+from tkinter import messagebox
 from datetime import datetime
-import hashlib
-from main import my_list, other_object
 
-# Database file
-DB_FILE = "hash_store.db"
+def validate_date_format(date_str):
+    """Validate the date format (YYYY-MM-DD)."""
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
 
-# Function to compute hash of an object
-def compute_hash(obj):
-    return hashlib.md5(str(obj).encode()).hexdigest()
+def on_run():
+    """Handle the Run button click."""
+    start_date = start_date_entry.get()
+    end_date = end_date_entry.get()
+    
+    # Validate input dates
+    if not validate_date_format(start_date):
+        messagebox.showerror("Invalid Input", "Start date is invalid. Use format YYYY-MM-DD.")
+        print("Error: Invalid start date format")
+        return
+    
+    if not validate_date_format(end_date):
+        messagebox.showerror("Invalid Input", "End date is invalid. Use format YYYY-MM-DD.")
+        print("Error: Invalid end date format")
+        return
 
-# Function to create or connect to the database
-def setup_database():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS hash_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    return conn
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-# Function to get the latest hash from the database
-def get_latest_hash(conn):
-    cursor = conn.cursor()
-    cursor.execute("SELECT hash FROM hash_data ORDER BY created_at DESC LIMIT 1")
-    result = cursor.fetchone()
-    return result[0] if result else None
+    if start_dt > end_dt:
+        messagebox.showerror("Invalid Input", "Start date must be earlier than end date.")
+        print("Error: Start date is after end date")
+        return
 
-# Function to store a new hash in the database
-def store_hash(conn, hash_value):
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO hash_data (hash) VALUES (?)", (hash_value,))
-    conn.commit()
+    # If validation passes, simulate calling a model
+    print(f"Running the model with start date: {start_date} and end date: {end_date}")
+    print("Model execution completed!")
 
-# Function to create a new pickle file
-def create_pickle_file(objects):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"data_{timestamp}.pkl"
-    with open(filename, "wb") as f:
-        pickle.dump(objects, f)
-    print(f"New pickle file created: {filename}")
+# Create main application window
+root = tk.Tk()
+root.title("Date Input UI")
 
-# Main process
-def main():
-    conn = setup_database()
+# Labels and entry fields
+tk.Label(root, text="Start Date (YYYY-MM-DD):").grid(row=0, column=0, padx=10, pady=5, sticky="e")
+start_date_entry = tk.Entry(root, width=20)
+start_date_entry.grid(row=0, column=1, padx=10, pady=5)
 
-    # Get the list and objects from main.py
-    objects = {"my_list": my_list, "other_object": other_object}
+tk.Label(root, text="End Date (YYYY-MM-DD):").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+end_date_entry = tk.Entry(root, width=20)
+end_date_entry.grid(row=1, column=1, padx=10, pady=5)
 
-    # Compute the current hash
-    current_hash = compute_hash(objects)
+# Run button
+run_button = tk.Button(root, text="Run", command=on_run)
+run_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    # Get the latest stored hash from the database
-    stored_hash = get_latest_hash(conn)
-
-    if not stored_hash:
-        print("No hash found in the database. First-time setup.")
-        # Store the new hash in the database
-        store_hash(conn, current_hash)
-
-        # Create a pickle file
-        create_pickle_file(objects)
-    elif current_hash != stored_hash:
-        print("Hashes do not match. Updating the hash and creating a new pickle file...")
-        # Store the new hash in the database
-        store_hash(conn, current_hash)
-
-        # Create a new pickle file
-        create_pickle_file(objects)
-    else:
-        print("Hashes match. No new pickle file created.")
-
-    conn.close()
-
-if __name__ == "__main__":
-    main()
+# Start the application
+root.mainloop()
