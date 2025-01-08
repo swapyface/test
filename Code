@@ -76,3 +76,21 @@ globals()[variable_name] = "This is the value of the dynamically created variabl
 print(f"Variable name: {variable_name}")
 print(f"Variable value: {globals()[variable_name]}")
 
+
+from sklearn.preprocessing import MinMaxScaler
+
+# Example data
+data = [[1], [2], [3], [4], [5]]
+
+# Initialize scaler
+scaler = MinMaxScaler()
+
+# Fit scaler to data
+scaler.fit(data)
+
+# Transform data
+scaled_data = scaler.transform(data)
+
+# Access scale_
+print(scaler.scale_)  # Works after fitting
+
