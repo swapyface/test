@@ -1,17 +1,20 @@
-# File: date_input_ui_with_model.py
+# File: date_input_ui_with_model_logs.py
 import tkinter as tk
 from tkinter import messagebox
-from script import ModelProcessor  # Import the ModelProcessor class
+import sys
+import io
+from script import ModelProcessor
 
 def log_message(message):
     """Log a message to the UI text area."""
-    log_text.config(state=tk.NORMAL)  # Enable editing
-    log_text.insert(tk.END, message + "\n")  # Append the message
-    log_text.config(state=tk.DISABLED)  # Disable editing
-    log_text.see(tk.END)  # Auto-scroll to the bottom
+    log_text.config(state=tk.NORMAL)
+    log_text.insert(tk.END, message + "\n")
+    log_text.config(state=tk.DISABLED)
+    log_text.see(tk.END)
 
 def validate_date_format(date_str):
     """Validate the date format (YYYY-MM-DD)."""
+    from datetime import datetime
     try:
         datetime.strptime(date_str, "%Y-%m-%d")
         return True
@@ -36,6 +39,7 @@ def on_run():
         log_message("Error: Invalid end date format")
         return
 
+    from datetime import datetime
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
@@ -46,13 +50,30 @@ def on_run():
 
     # If validation passes, call the model
     log_message(f"Initializing the model with start date: {start_date} and end date: {end_date}")
+    
     try:
+        # Redirect stdout to capture print statements from script.py
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+
+        # Call the ModelProcessor
         processor = ModelProcessor(start_date, end_date)
         result = processor.modelrun()
+
+        # Get the captured output
+        script_logs = sys.stdout.getvalue()
+
+        # Restore the original stdout
+        sys.stdout = old_stdout
+
+        # Log the output from script.py
+        log_message(script_logs.strip())
         log_message("Model execution completed!")
         log_message(f"Result: {result}")
     except Exception as e:
         log_message(f"Error occurred while running the model: {e}")
+        # Restore stdout in case of exceptions
+        sys.stdout = old_stdout
 
 # Create main application window
 root = tk.Tk()
