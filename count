@@ -1,34 +1,56 @@
-def get_parameters_for_size(dataset_size: int, all_parameters: dict):
+def get_ingestion_data(
+    self,
+    input_start_date: Optional[datetime] = None,
+    input_end_date: datetime = None,
+    num_days: Optional[int] = None,
+    mandatory_cols: List[str] = None
+) -> pd.DataFrame:
     """
-    Dynamically retrieves the appropriate parameters for a given dataset size.
-    :param dataset_size: int - Size of the dataset
-    :param all_parameters: dict - Dictionary of all parameters
-    :return: dict - Matching parameters
-    """
-    if dataset_size < 100:
-        return all_parameters["size < 100"]
-    elif 100 < dataset_size <= 500:
-        return all_parameters["100 < size <= 500"]
-    elif 500 < dataset_size <= 1000:
-        return all_parameters["500 < size <= 1000"]
-    elif 1000 < dataset_size <= 5000:
-        return all_parameters["1000 < size <= 5000"]
-    elif 5000 < dataset_size <= 10000:
-        return all_parameters["5000 < size <= 10000"]
-    elif 10000 < dataset_size <= 50000:
-        return all_parameters["10000 < size <= 50000"]
-    elif 50000 < dataset_size <= 100000:
-        return all_parameters["50000 < size <= 100000"]
-    elif 100000 < dataset_size <= 300000:
-        return all_parameters["100000 < size <= 300000"]
-    elif 300000 < dataset_size <= 500000:
-        return all_parameters["300000 < size <= 500000"]
-    elif 500000 < dataset_size <= 1000000:
-        return all_parameters["500000 < size <= 1000000"]
-    else:
-        raise ValueError("Dataset size exceeds the defined range.")
+    Ingest data from an API and return a pandas DataFrame.
 
-# Example usage
-dataset_size = 75000
-parameters = get_parameters_for_size(dataset_size, loaded_parameters)
-print(f"Parameters for dataset size {dataset_size}: {parameters}")
+    :param input_start_date: Start date for data ingestion. If not provided, it will be calculated using end_date and num_days.
+    :param input_end_date: End date for data ingestion.
+    :param num_days: Number of days to fetch data. Used to calculate start_date if input_start_date is not provided.
+    :param mandatory_cols: List of mandatory columns for the data.
+    :return: Data as a pandas DataFrame.
+    """
+    # Validate inputs
+    if not input_end_date:
+        raise ValueError("End date must be provided.")
+
+    if not input_start_date and num_days is None:
+        raise ValueError("Either start_date or num_days must be provided.")
+
+    # Calculate start_date if not provided
+    if input_start_date is None:
+        input_start_date = input_end_date - timedelta(days=num_days - 1)
+
+    print(f"Calculated start_date: {input_start_date}, end_date: {input_end_date}")
+
+    self.mandatory_cols = mandatory_cols
+    master_table = None
+    snapshot_ids = []
+    num_of_days = (input_end_date - input_start_date).days
+
+    # Generate date series
+    formatted_end_date = datetime.strptime(
+        f"{input_end_date.year}-{input_end_date.month}-{input_end_date.day}", "%Y-%m-%d"
+    )
+
+    for batch_date in self.for_date_series(num_of_days, formatted_end_date):
+        snapshot_id = self.fetch_snapshot_id(batch_date)
+        snapshot_ids.append(snapshot_id)
+
+    # Split snapshot IDs into manageable chunks
+    snapshot_id_chunks = self.split_snapshots(snapshot_ids)
+
+    # Fetch data in chunks
+    for chunk in snapshot_id_chunks:
+        table = self.fetch_data(chunk)
+        if master_table is None:
+            master_table = table
+        else:
+            master_table = master_table.vConcat(table)
+
+    # Convert to DataFrame
+    return pd.DataFrame(master_table, columns=master_table.columnNames())
