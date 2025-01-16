@@ -1,56 +1,31 @@
-def get_ingestion_data(
-    self,
-    input_start_date: Optional[datetime] = None,
-    input_end_date: datetime = None,
-    num_days: Optional[int] = None,
-    mandatory_cols: List[str] = None
-) -> pd.DataFrame:
+def for_date_series(self, num_days: int, formatted_end_date: datetime) -> List[str]:
     """
-    Ingest data from an API and return a pandas DataFrame.
+    Generate a series of business dates from the calculated start date to the given end date.
 
-    :param input_start_date: Start date for data ingestion. If not provided, it will be calculated using end_date and num_days.
-    :param input_end_date: End date for data ingestion.
-    :param num_days: Number of days to fetch data. Used to calculate start_date if input_start_date is not provided.
-    :param mandatory_cols: List of mandatory columns for the data.
-    :return: Data as a pandas DataFrame.
+    :param num_days: Number of days to generate.
+    :param formatted_end_date: The end date for the series.
+    :return: List of business dates as strings in the format 'YYYY-MM-DD'.
     """
-    # Validate inputs
-    if not input_end_date:
-        raise ValueError("End date must be provided.")
+    # Ensure date format consistency
+    date_format = "%Y-%m-%d"
 
-    if not input_start_date and num_days is None:
-        raise ValueError("Either start_date or num_days must be provided.")
+    # Calculate start_date based on num_days (include the end_date in the range)
+    start_date = formatted_end_date - timedelta(days=num_days - 1) if num_days > 1 else formatted_end_date
 
-    # Calculate start_date if not provided
-    if input_start_date is None:
-        input_start_date = input_end_date - timedelta(days=num_days - 1)
+    # Initialize variables
+    date_series = []
+    current_date = start_date
 
-    print(f"Calculated start_date: {input_start_date}, end_date: {input_end_date}")
+    print(f"Generating date series from {start_date} to {formatted_end_date}...")
 
-    self.mandatory_cols = mandatory_cols
-    master_table = None
-    snapshot_ids = []
-    num_of_days = (input_end_date - input_start_date).days
+    # Loop through all days from start_date to end_date (inclusive)
+    while current_date <= formatted_end_date:
+        # Check if it's a business day
+        if self.is_business_day(current_date):
+            date_series.append(current_date.strftime(date_format))
+        current_date += timedelta(days=1)
 
-    # Generate date series
-    formatted_end_date = datetime.strptime(
-        f"{input_end_date.year}-{input_end_date.month}-{input_end_date.day}", "%Y-%m-%d"
-    )
+    # Debug output
+    print(f"Generated date series: {date_series}")
 
-    for batch_date in self.for_date_series(num_of_days, formatted_end_date):
-        snapshot_id = self.fetch_snapshot_id(batch_date)
-        snapshot_ids.append(snapshot_id)
-
-    # Split snapshot IDs into manageable chunks
-    snapshot_id_chunks = self.split_snapshots(snapshot_ids)
-
-    # Fetch data in chunks
-    for chunk in snapshot_id_chunks:
-        table = self.fetch_data(chunk)
-        if master_table is None:
-            master_table = table
-        else:
-            master_table = master_table.vConcat(table)
-
-    # Convert to DataFrame
-    return pd.DataFrame(master_table, columns=master_table.columnNames())
+    return date_series
