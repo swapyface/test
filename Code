@@ -1,96 +1,32 @@
-yimport pickle
+
+# Improved Code
 import pandas as pd
 
-# Load Preprocessing, Model, and Parameters
-with open("preprocessing.pkl", "rb") as f:
-    scaler = pickle.load(f)
+def generate_master_table(self, num_days, end_date):
+    """
+    Generate a master table by fetching snapshots in batches and combining them into a single DataFrame.
+    """
+    # Generate date series for the snapshot IDs
+    snapshot_ids = []
+    for batch_date in self.generate_date_series(num_days, formatted_end_date=end_date):
+        snapshot_id = self.get_snapshot_id(batch_date, self.snapshot)
+        snapshot_ids.append(snapshot_id)
 
-with open("model.pkl", "rb") as f:
-    iso_model = pickle.load(f)
+    # Split snapshot IDs into manageable chunks
+    snapshot_id_chunks = self.split_snapshot_ids(snapshot_ids)
 
-with open("parameters.pkl", "rb") as f:
-    required_columns = pickle.load(f)
+    # Initialize the master table
+    master_table = None
 
-# Use the loaded files
-print("Required Columns:", required_columns)
+    # Fetch data in chunks and concatenate into the master table
+    for chunk in snapshot_id_chunks:
+        table = self.fetch_data(chunk)
+        if master_table is None:
+            master_table = table
+        else:
+            master_table = pd.concat([master_table, table], ignore_index=True)
 
-# Example Data (replace with real input)
-test_data = pd.DataFrame({
-    "column1": [2],
-    "column2": [5],
-    "column3": [8]
-})
+    # Convert the master table to a DataFrame with appropriate column names
+    data = pd.DataFrame(master_table, columns=self.master_table_column_names)
 
-# Preprocess and Predict
-scaled_test_data = scaler.transform(test_data[required_columns])
-predictions = iso_model.predict(scaled_test_data)
-print("Predictions:", predictions)
-
-
-all_parameters = {
-    "size < 100": {"n_estimators": 20, "max_samples": "dataset_size", "contamination": 0.05, "max_features": 1.0},
-    "100 < size <= 500": {"n_estimators": 50, "max_samples": 100, "contamination": 0.05, "max_features": 1.0},
-    "500 < size <= 1000": {"n_estimators": 100, "max_samples": 256, "contamination": 0.05, "max_features": 1.0},
-    "1000 < size <= 5000": {"n_estimators": 300, "max_samples": 500, "contamination": 0.05, "max_features": 1.0},
-    "5000 < size <= 10000": {"n_estimators": 500, "max_samples": 1500, "contamination": 0.05, "max_features": 1.0},
-    "10000 < size <= 50000": {"n_estimators": 1000, "max_samples": 3000, "contamination": 0.05, "max_features": 1.0},
-    "50000 < size <= 100000": {"n_estimators": 1500, "max_samples": 5000, "contamination": 0.05, "max_features": 1.0},
-    "100000 < size <= 300000": {"n_estimators": 2000, "max_samples": 6000, "contamination": 0.05, "max_features": 1.0},
-    "300000 < size <= 500000": {"n_estimators": 5000, "max_samples": 15000, "contamination": 0.05, "max_features": 1.0},
-    "500000 < size <= 1000000": {"n_estimators": 7000, "max_samples": 20000, "contamination": 0.05, "max_features": 1.0}
-}
-
-# Load the parameters dictionary from the pickle file
-with open("all_model_parameters.pkl", "rb") as f:
-    loaded_parameters = pickle.load(f)
-
-print("Loaded Parameters:")
-for key, value in loaded_parameters.items():
-    print(f"{key}: {value}")
-
-# Load parameters from pickle
-with open("all_parameters.pkl", "rb") as f:
-    loaded_parameters = pickle.load(f)
-
-# Dynamically assign specific keys to variables
-required_columns = loaded_parameters.get("required_columns", [])
-model_params = loaded_parameters.get("model_params", {})
-additional_config = loaded_parameters.get("additional_config", {})
-
-# Print the variables
-print("Required Columns:", required_columns)
-print("Model Parameters:", model_params)
-print("Additional Config:", additional_config)
-from datetime import datetime
-
-# Get current date and time
-current_time = datetime.now()
-
-# Format the variable name (e.g., 'variable_2024_12_31_123456')
-variable_name = f"variable_{current_time.strftime('%Y_%m_%d_%H%M%S')}"
-
-# Create a variable with the generated name dynamically
-globals()[variable_name] = "This is the value of the dynamically created variable"
-
-# Access the variable dynamically
-print(f"Variable name: {variable_name}")
-print(f"Variable value: {globals()[variable_name]}")
-
-
-from sklearn.preprocessing import MinMaxScaler
-
-# Example data
-data = [[1], [2], [3], [4], [5]]
-
-# Initialize scaler
-scaler = MinMaxScaler()
-
-# Fit scaler to data
-scaler.fit(data)
-
-# Transform data
-scaled_data = scaler.transform(data)
-
-# Access scale_
-print(scaler.scale_)  # Works after fitting
-
+    return data
