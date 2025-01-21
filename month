@@ -1,100 +1,20 @@
-# File: date_input_ui_with_model_logs.py
-import tkinter as tk
-from tkinter import messagebox
-import sys
-import io
-from script import ModelProcessor
+import pandas as pd
 
-def log_message(message):
-    """Log a message to the UI text area."""
-    log_text.config(state=tk.NORMAL)
-    log_text.insert(tk.END, message + "\n")
-    log_text.config(state=tk.DISABLED)
-    log_text.see(tk.END)
+# Sample dataframe
+data = {
+    'id': [1, 2, 3, 1, 2, 4],
+    'name': ['A', 'B', 'C', 'A', 'B', 'D']
+}
+df = pd.DataFrame(data)
 
-def validate_date_format(date_str):
-    """Validate the date format (YYYY-MM-DD)."""
-    from datetime import datetime
-    try:
-        datetime.strptime(date_str, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
+# Example function to get price for an id
+def get_price(id_value):
+    # Replace this with your actual logic
+    price_mapping = {1: 100, 2: 200, 3: 300, 4: 400}
+    return price_mapping.get(id_value, 0)  # Default price is 0 if id not found
 
-def on_run():
-    """Handle the Run button click."""
-    start_date = start_date_entry.get()
-    end_date = end_date_entry.get()
-    
-    log_message("Validating inputs...")
+# Apply the function to get price for each id and update the dataframe
+df['price'] = df['id'].apply(get_price)
 
-    # Validate input dates
-    if not validate_date_format(start_date):
-        messagebox.showerror("Invalid Input", "Start date is invalid. Use format YYYY-MM-DD.")
-        log_message("Error: Invalid start date format")
-        return
-    
-    if not validate_date_format(end_date):
-        messagebox.showerror("Invalid Input", "End date is invalid. Use format YYYY-MM-DD.")
-        log_message("Error: Invalid end date format")
-        return
-
-    from datetime import datetime
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-
-    if start_dt > end_dt:
-        messagebox.showerror("Invalid Input", "Start date must be earlier than end date.")
-        log_message("Error: Start date is after end date")
-        return
-
-    # If validation passes, call the model
-    log_message(f"Initializing the model with start date: {start_date} and end date: {end_date}")
-    
-    try:
-        # Redirect stdout to capture print statements from script.py
-        old_stdout = sys.stdout
-        sys.stdout = io.StringIO()
-
-        # Call the ModelProcessor
-        processor = ModelProcessor(start_date, end_date)
-        result = processor.modelrun()
-
-        # Get the captured output
-        script_logs = sys.stdout.getvalue()
-
-        # Restore the original stdout
-        sys.stdout = old_stdout
-
-        # Log the output from script.py
-        log_message(script_logs.strip())
-        log_message("Model execution completed!")
-        log_message(f"Result: {result}")
-    except Exception as e:
-        log_message(f"Error occurred while running the model: {e}")
-        # Restore stdout in case of exceptions
-        sys.stdout = old_stdout
-
-# Create main application window
-root = tk.Tk()
-root.title("Date Input UI with Model Integration")
-
-# Input fields
-tk.Label(root, text="Start Date (YYYY-MM-DD):").grid(row=0, column=0, padx=10, pady=5, sticky="e")
-start_date_entry = tk.Entry(root, width=20)
-start_date_entry.grid(row=0, column=1, padx=10, pady=5)
-
-tk.Label(root, text="End Date (YYYY-MM-DD):").grid(row=1, column=0, padx=10, pady=5, sticky="e")
-end_date_entry = tk.Entry(root, width=20)
-end_date_entry.grid(row=1, column=1, padx=10, pady=5)
-
-# Run button
-run_button = tk.Button(root, text="Run", command=on_run)
-run_button.grid(row=2, column=0, columnspan=2, pady=10)
-
-# Logs text area
-log_text = tk.Text(root, width=60, height=15, state=tk.DISABLED, wrap=tk.WORD)
-log_text.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
-
-# Start the application
-root.mainloop()
+# Print the updated dataframe
+print(df)
