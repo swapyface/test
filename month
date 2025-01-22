@@ -18,3 +18,30 @@ df['price'] = df['id'].apply(get_price)
 
 # Print the updated dataframe
 print(df)
+
+import pandas as pd
+
+# Sample dataframe
+data = {
+    'id': [1, 2, 3, 1, 2, 4],
+    'name': ['A', 'B', 'C', 'A', 'B', 'D']
+}
+df = pd.DataFrame(data)
+
+# Example function to get price for an id
+def get_price(id_value):
+    # Replace this with your actual logic
+    price_mapping = {1: 100, 2: 200, 3: 300, 4: 400}
+    return price_mapping.get(id_value, 0)  # Default price is 0 if id not found
+
+# Step 1: Find unique IDs
+unique_ids = df['id'].unique()
+
+# Step 2: Get prices for unique IDs
+id_to_price = {id_: get_price(id_) for id_ in unique_ids}
+
+# Step 3: Map the prices back to the DataFrame
+df['price'] = df['id'].map(id_to_price)
+
+# Print the updated DataFrame
+print(df)
