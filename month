@@ -45,3 +45,50 @@ df['price'] = df['id'].map(id_to_price)
 
 # Print the updated DataFrame
 print(df)
+
+
+import pandas as pd
+
+# Sample dataframe
+data = {
+    'id': [1, 2, 3, 1, 2, 4, 5, 6, 7, 8, 9, 10] * 100000,  # Large dataset example
+    'name': ['A', 'B', 'C', 'A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] * 100000
+}
+df = pd.DataFrame(data)
+
+# Example function to get price for an id
+def get_price(id_value):
+    # Simulated logic (replace with actual API/database call logic)
+    price_mapping = {1: 100, 2: 200, 3: 300, 4: 400, 5: 500, 6: 600, 7: 700, 8: 800, 9: 900, 10: 1000}
+    return price_mapping.get(id_value, 0)  # Default price is 0 if id not found
+
+# Step 1: Find unique IDs
+unique_ids = df['id'].unique()
+
+# Step 2: Create or clear the output CSV file
+output_file = 'updated_dataset.csv'
+with open(output_file, 'w') as f:
+    f.write('id,name,price\n')  # Write header to the file
+
+# Step 3: Process data in chunks of 1000 records
+chunk_size = 1000
+
+for i in range(0, len(unique_ids), chunk_size):
+    # Get the current chunk of unique IDs
+    chunk_ids = unique_ids[i:i + chunk_size]
+    
+    # Fetch prices for the current chunk of IDs
+    chunk_prices = {id_: get_price(id_) for id_ in chunk_ids}
+    
+    # Map prices back to the original DataFrame for the current chunk
+    chunk_df = df[df['id'].isin(chunk_ids)].copy()
+    chunk_df['price'] = chunk_df['id'].map(chunk_prices)
+    
+    # Append the updated chunk to the CSV file
+    chunk_df.to_csv(output_file, mode='a', index=False, header=False)
+    
+    # Log progress
+    print(f"Processed IDs {i} to {i + len(chunk_ids)} and saved to {output_file}")
+
+# Step 4: Final log
+print(f"Processing complete. Updated dataset saved to {output_file}.")
