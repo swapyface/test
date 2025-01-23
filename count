@@ -1,25 +1,3 @@
-Here’s a sample of an acceptance criteria for your Jira ticket regarding setting up the scheduler for your ML model:
+Description:
 
-Acceptance Criteria:
-	1.	Scheduler Functionality:
-	•	The scheduler must trigger the ML model execution at the predefined intervals (e.g., hourly, daily, etc.).
-	•	The scheduler must handle retries in case of model execution failure.
-	2.	Configuration Management:
-	•	Scheduling intervals must be configurable via a properties file or environment variables.
-	•	The scheduler should allow enabling/disabling the job without code changes.
-	3.	Logging and Monitoring:
-	•	Detailed logs must be generated for each scheduler run, including job start time, end time, and status (success/failure).
-	•	Failures should trigger alerts/notifications for relevant stakeholders.
-	4.	Error Handling:
-	•	The system must log errors with detailed stack traces for troubleshooting.
-	•	If a failure occurs, the scheduler should retry execution based on a defined retry policy (e.g., 3 attempts with a 5-minute delay).
-	5.	Performance:
-	•	The scheduler must not affect the overall system performance or overload resources.
-	•	The execution of the scheduler should complete within acceptable runtime limits.
-	6.	Integration Testing:
-	•	Verify the scheduler triggers the ML model correctly in a staging environment.
-	•	Ensure the scheduler runs only during the configured intervals and does not duplicate executions.
-	7.	Documentation:
-	•	Provide documentation detailing how to configure, test, and maintain the scheduler.
-
-Feel free to customize based on your specific requirements.
+Set up a scheduler to automate the execution of the ML model at predefined intervals. The scheduler should ensure seamless integration, configurable scheduling intervals, error handling with retries, and robust logging for monitoring and troubleshooting. The implementation should be lightweight, efficient, and scalable to meet performance requirements without overloading system resources. Proper documentation and testing should be completed to ensure the scheduler functions reliably in production.
