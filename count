@@ -1,31 +1,25 @@
-def for_date_series(self, num_days: int, formatted_end_date: datetime) -> List[str]:
-    """
-    Generate a series of business dates from the calculated start date to the given end date.
+Here’s a sample of an acceptance criteria for your Jira ticket regarding setting up the scheduler for your ML model:
 
-    :param num_days: Number of days to generate.
-    :param formatted_end_date: The end date for the series.
-    :return: List of business dates as strings in the format 'YYYY-MM-DD'.
-    """
-    # Ensure date format consistency
-    date_format = "%Y-%m-%d"
+Acceptance Criteria:
+	1.	Scheduler Functionality:
+	•	The scheduler must trigger the ML model execution at the predefined intervals (e.g., hourly, daily, etc.).
+	•	The scheduler must handle retries in case of model execution failure.
+	2.	Configuration Management:
+	•	Scheduling intervals must be configurable via a properties file or environment variables.
+	•	The scheduler should allow enabling/disabling the job without code changes.
+	3.	Logging and Monitoring:
+	•	Detailed logs must be generated for each scheduler run, including job start time, end time, and status (success/failure).
+	•	Failures should trigger alerts/notifications for relevant stakeholders.
+	4.	Error Handling:
+	•	The system must log errors with detailed stack traces for troubleshooting.
+	•	If a failure occurs, the scheduler should retry execution based on a defined retry policy (e.g., 3 attempts with a 5-minute delay).
+	5.	Performance:
+	•	The scheduler must not affect the overall system performance or overload resources.
+	•	The execution of the scheduler should complete within acceptable runtime limits.
+	6.	Integration Testing:
+	•	Verify the scheduler triggers the ML model correctly in a staging environment.
+	•	Ensure the scheduler runs only during the configured intervals and does not duplicate executions.
+	7.	Documentation:
+	•	Provide documentation detailing how to configure, test, and maintain the scheduler.
 
-    # Calculate start_date based on num_days (include the end_date in the range)
-    start_date = formatted_end_date - timedelta(days=num_days - 1) if num_days > 1 else formatted_end_date
-
-    # Initialize variables
-    date_series = []
-    current_date = start_date
-
-    print(f"Generating date series from {start_date} to {formatted_end_date}...")
-
-    # Loop through all days from start_date to end_date (inclusive)
-    while current_date <= formatted_end_date:
-        # Check if it's a business day
-        if self.is_business_day(current_date):
-            date_series.append(current_date.strftime(date_format))
-        current_date += timedelta(days=1)
-
-    # Debug output
-    print(f"Generated date series: {date_series}")
-
-    return date_series
+Feel free to customize based on your specific requirements.
