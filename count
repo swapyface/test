@@ -39,3 +39,8 @@ df['OBS'] = df.apply(determine_obs, axis=1)
 
 # Print the resulting DataFrame
 print(df[['ISO', 'ZSCORE', 'BESP', 'DaysToMaturity', 'Rating', 'OBS']])
+
+
+df['MaturityDt'] = pd.to_datetime(df['MaturityDt'], format='%Y-%m-%d')
+df['RevalDt'] = pd.to_datetime(df['RevalDt'], format='%Y-%m-%d')
+
