@@ -1,48 +1,10 @@
 import pandas as pd
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor
 
-# Sample DataFrame
-data = {
-    'id': [1, 2, 3, 1, 2, 4, 5, 6, 7, 8, 9, 10] * 100000,
-    'name': ['A', 'B', 'C', 'A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] * 100000,
-    'price': [np.nan] * 1200000  # Price column initialized as empty
-}
+# Sample data
+data = {'rating': ['A@', 'AA+', 'BBB-', 'C$', 'AAA!', 'BB#1']}
 df = pd.DataFrame(data)
 
-# Example function to get price for an id
-def get_price(id_value):
-    # Simulated logic (replace with actual API/database call logic)
-    price_mapping = {1: 100, 2: 200, 3: 300, 4: 400, 5: 500, 6: 600, 7: 700, 8: 800, 9: 900, 10: 1000}
-    return price_mapping.get(id_value, 0)  # Default price is 0 if id not found
+# Keep only letters, numbers, and the '-' symbol in the rating column
+df['rating_cleaned'] = df['rating'].str.replace(r'[^a-zA-Z0-9-]', '', regex=True)
 
-# Step 1: Function to process a single chunk of IDs
-def process_chunk(chunk_ids):
-    # Fetch prices for the chunk of IDs
-    chunk_prices = {id_: get_price(id_) for id_ in chunk_ids}
-    # Return the price mapping
-    return chunk_prices
-
-# Step 2: Find unique IDs with missing prices
-unique_ids_with_missing_prices = df.loc[df['price'].isna(), 'id'].unique()
-
-# Step 3: Define chunk size and create chunks
-chunk_size = 1000
-chunks = [unique_ids_with_missing_prices[i:i + chunk_size] for i in range(0, len(unique_ids_with_missing_prices), chunk_size)]
-
-# Step 4: Process chunks in parallel
-price_map = {}
-with ThreadPoolExecutor(max_workers=4) as executor:  # Adjust max_workers based on your system
-    # Submit chunks for parallel processing
-    futures = {executor.submit(process_chunk, chunk): chunk for chunk in chunks}
-    
-    for future in futures:
-        # Combine the results from each processed chunk
-        price_map.update(future.result())
-
-# Step 5: Map prices back to the DataFrame
-df.loc[df['price'].isna(), 'price'] = df.loc[df['price'].isna(), 'id'].map(price_map)
-
-# Final log and save
-print("Processing complete. The DataFrame has been updated.")
-df.to_csv("updated_dataset.csv", index=False)
+print(df)
