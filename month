@@ -1,10 +1,10 @@
 import pandas as pd
 
 # Sample data
-data = {'rating': ['A@', 'AA+', 'BBB-', 'C$', 'AAA!', 'BB#1']}
+data = {'rating': ['AAA Stable', 'BBB- Negative', 'AA+ Positive', 'A Watch', 'BB+ Developing']}
 df = pd.DataFrame(data)
 
-# Keep only letters, numbers, and the '-' symbol in the rating column
-df['rating_cleaned'] = df['rating'].str.replace(r'[^a-zA-Z0-9-]', '', regex=True)
+# Clean the rating column: Keep only letters, numbers, '-', and remove anything after a space
+df['rating_cleaned'] = df['rating'].str.replace(r'[^a-zA-Z0-9-]| .*', '', regex=True)
 
 print(df)
