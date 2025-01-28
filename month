@@ -1,3 +1,16 @@
+from gensim.models import Word2Vec
+
+# Create sequences of ratings for Word2Vec
+rating_sequences = df.groupby('Company')['Rating'].apply(list).tolist()
+
+# Train Word2Vec model
+w2v_model = Word2Vec(sentences=rating_sequences, vector_size=10, window=3, min_count=1, workers=4)
+
+# Get embedding for a specific company
+company_embedding = w2v_model.wv['A']  # Example embedding for rating 'A'
+print(company_embedding)
+
+
 grouped_data = df.groupby('Company')['Rating'].apply(list)
 print(grouped_data.head())
 
