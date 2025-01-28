@@ -1,3 +1,4 @@
+df[f'{col}Encoded'] = label_encoder.fit_transform(df[col])
 from gensim.models import Word2Vec
 
 # Create sequences of ratings for Word2Vec
