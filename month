@@ -1,10 +1,97 @@
-import pandas as pd
+grouped_data = df.groupby('Company')['Rating'].apply(list)
+print(grouped_data.head())
 
-# Sample data
-data = {'rating': ['AAA Stable', 'BBB- Negative', 'AA+ Positive', 'A Watch', 'BB+ Developing']}
-df = pd.DataFrame(data)
+# Output example:
+# Company_A: ['A', 'BBB']
+# Company_B: ['AA', 'A']
 
-# Clean the rating column: Keep only letters, numbers, '-', and remove anything after a space
-df['rating_cleaned'] = df['rating'].str.replace(r'[^a-zA-Z0-9-]| .*', '', regex=True)
 
-print(df)
+# Get average embedding for each company's historical ratings
+def get_company_embedding(ratings):
+    vectors = [w2v_model.wv[r] for r in ratings if r in w2v_model.wv]
+    return np.mean(vectors, axis=0) if vectors else np.zeros(w2v_model.vector_size)
+
+df['CompanyEmbedding'] = df['Company'].map(
+    lambda company: get_company_embedding(grouped_data[company])
+)
+
+# Embedding example
+print(df['CompanyEmbedding'].head())
+
+
+from sklearn.ensemble import IsolationForest
+
+# Combine embedding features with other features
+X = pd.concat([df[['IndustryEncoded', 'TimeToMaturity']], pd.DataFrame(df['CompanyEmbedding'].tolist())], axis=1)
+
+# Fit Isolation Forest
+model = IsolationForest(contamination=0.05, random_state=42)
+df['Outlier'] = model.fit_predict(X)
+
+
+import numpy as np
+
+def create_sequences(data, sequence_length):
+    sequences = []
+    for i in range(len(data) - sequence_length + 1):
+        seq = data[i:i+sequence_length]
+        sequences.append(seq)
+    return np.array(sequences)
+
+# Group by company and prepare sequences
+sequence_length = 5  # Number of historical steps
+features = ['RatingEncoded', 'TimeToMaturity']  # Features for LSTM
+
+sequences = []
+for company, group in df.groupby('Company'):
+    company_data = group[features].values
+    company_sequences = create_sequences(company_data, sequence_length)
+    sequences.extend(company_sequences)
+
+sequences = np.array(sequences)  # Shape: (num_sequences, sequence_length, num_features)
+
+
+
+
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, RepeatVector, TimeDistributed, Dense
+
+# Define model parameters
+input_dim = sequences.shape[2]  # Number of features
+latent_dim = 64  # Dimensionality of embeddings
+
+# LSTM Autoencoder
+inputs = Input(shape=(sequence_length, input_dim))
+encoded = LSTM(latent_dim, activation='relu')(inputs)
+decoded = RepeatVector(sequence_length)(encoded)
+decoded = LSTM(input_dim, activation='relu', return_sequences=True)(decoded)
+
+# Model
+autoencoder = Model(inputs, decoded)
+autoencoder.compile(optimizer='adam', loss='mse')
+
+# Train the model
+autoencoder.fit(sequences, sequences, epochs=50, batch_size=32, validation_split=0.2)
+
+
+# Create an encoder model to extract embeddings
+encoder = Model(inputs, encoded)
+
+# Get embeddings for all sequences
+embeddings = encoder.predict(sequences)
+print(embeddings.shape)  # Shape: (num_sequences, latent_dim)
+
+
+# Get reconstructed sequences
+reconstructed_sequences = autoencoder.predict(sequences)
+
+# Calculate reconstruction errors
+errors = np.mean((sequences - reconstructed_sequences) ** 2, axis=(1, 2))
+
+# Set a threshold for anomalies (e.g., based on 95th percentile)
+threshold = np.percentile(errors, 95)
+anomalies = errors > threshold
+
+# Map anomalies back to companies
+print("Anomalies:", anomalies)
