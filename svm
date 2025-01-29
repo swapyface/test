@@ -1,1 +1,95 @@
 
+import pandas as pd
+from gensim.models import Word2Vec
+import numpy as np
+
+# Load dataset
+df = pd.read_csv("historical_data.csv")
+
+# Convert company names into a list of words
+company_names = df['Company'].astype(str).apply(lambda x: x.split()).tolist()
+
+# Train Word2Vec model
+w2v_model = Word2Vec(sentences=company_names, vector_size=10, window=5, min_count=1, workers=4)
+
+# Save the trained Word2Vec model
+w2v_model.save("company_w2v.model")
+
+
+def get_company_vector(company_name, model):
+    """Convert a company name to its Word2Vec vector representation."""
+    words = company_name.split()
+    vectors = [model.wv[word] for word in words if word in model.wv]
+    
+    if vectors:
+        return np.mean(vectors, axis=0)  # Average word vectors if multiple words
+    else:
+        return np.zeros(model.vector_size)  # Return zero vector if unseen word
+
+# Load Word2Vec model
+w2v_model = Word2Vec.load("company_w2v.model")
+
+# Convert company names to vectors
+df['Company_Vector'] = df['Company'].apply(lambda x: get_company_vector(x, w2v_model))
+
+# Expand vector columns
+company_vec_df = pd.DataFrame(df['Company_Vector'].tolist(), index=df.index)
+df = pd.concat([df, company_vec_df], axis=1)
+
+# Drop original 'Company' column
+df.drop(columns=['Company', 'Company_Vector'], inplace=True)
+
+
+from sklearn.preprocessing import LabelEncoder
+
+encoders = {}
+
+for col in ['Rating', 'Group', 'Industry']:
+    encoders[col] = LabelEncoder()
+    df[col] = encoders[col].fit_transform(df[col])
+
+def detect_outliers_autoencoder(new_data, autoencoder, w2v_model, encoders, threshold=0.05):
+    """Detect outliers using autoencoder reconstruction error."""
+    
+    # Convert company name to vector
+    company_vector = get_company_vector(new_data['Company'], w2v_model)
+
+    # Convert dictionary to DataFrame
+    new_df = pd.DataFrame([new_data])
+
+    # Encode categorical variables
+    for col in ['Rating', 'Group', 'Industry']:
+        if col in new_df.columns and col in encoders:
+            try:
+                new_df[col] = encoders[col].transform(new_df[col])
+            except ValueError:
+                print(f"Warning: Unknown category in {col}")
+                return "Outlier (Unknown Category)"
+
+    # Drop original 'Company' column and add vector representation
+    new_df = new_df.drop(columns=['Company'])
+    new_df = pd.concat([new_df, pd.DataFrame([company_vector])], axis=1)
+
+    # Compute reconstruction error
+    reconstructed = autoencoder.predict(new_df)
+    error = np.mean(np.abs(new_df.values - reconstructed), axis=1)
+
+    # Flag as outlier if error is above threshold
+    return "Outlier" if error[0] > threshold else "Normal"
+
+
+# Load trained models
+autoencoder = keras.models.load_model("autoencoder_model.h5")
+w2v_model = Word2Vec.load("company_w2v.model")
+encoders = joblib.load("encoders.pkl")
+
+# Example new data
+new_record = {
+    "Company": "Apple",
+    "Rating": "D",
+    "Group": "Tech",
+    "Industry": "Software"
+}
+
+result = detect_outliers_autoencoder(new_record, autoencoder, w2v_model, encoders)
+print(f"Prediction: {result}")  # Should return "Outlier"
