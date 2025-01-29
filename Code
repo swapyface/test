@@ -215,3 +215,83 @@ vae.fit(final_data, final_data, epochs=50, batch_size=32, shuffle=True, validati
 
 # Save Model
 vae.save("vae_model.h5")
+
+
+import numpy as np
+import pandas as pd
+
+def batch_predict_outliers(new_data_batch, vae, w2v_model, encoders, threshold=0.05):
+    """
+    Batch process new records and predict outliers using VAE model.
+    Each record contains a unique identifier, company name, and categorical features.
+    """
+    results = []
+    
+    for new_data in new_data_batch:
+        unique_id = new_data.pop("Unique_ID")  # Extract unique identifier
+        
+        # Convert company name to vector
+        company_vector = get_company_vector(new_data['Company'], w2v_model)
+
+        # Convert dictionary to DataFrame
+        new_df = pd.DataFrame([new_data])
+
+        # Encode categorical variables
+        for col in ['Rating', 'Group', 'Industry']:
+            if col in new_df.columns and col in encoders:
+                try:
+                    new_df[col] = encoders[col].transform(new_df[col])
+                except ValueError:
+                    results.append({"Unique_ID": unique_id, "Prediction": "Outlier (Unknown Category)"})
+                    continue
+
+        # Drop original 'Company' column and add vector representation
+        new_df = new_df.drop(columns=['Company'])
+        new_df = pd.concat([new_df, pd.DataFrame([company_vector])], axis=1)
+
+        # Get VAE reconstructed output
+        reconstructed = vae.predict(new_df)
+
+        # Compute reconstruction error
+        error = np.mean(np.abs(new_df.values - reconstructed), axis=1)
+
+        # Flag as outlier if error exceeds threshold
+        result = "Outlier" if error[0] > threshold else "Normal"
+
+        results.append({"Unique_ID": unique_id, "Prediction": result})
+
+    return results
+
+# Example batch of new data with Unique ID
+new_data_batch = [
+    {
+        "Unique_ID": 12345,
+        "Company": "Apple",
+        "Rating": "A",
+        "Group": "Tech",
+        "Industry": "Software"
+    },
+    {
+        "Unique_ID": 12346,
+        "Company": "Microsoft",
+        "Rating": "B",
+        "Group": "Tech",
+        "Industry": "Software"
+    },
+    {
+        "Unique_ID": 12347,
+        "Company": "Tesla",
+        "Rating": "D",  # Unusual rating
+        "Group": "Auto",
+        "Industry": "EV"
+    }
+]
+
+# Run batch predictions
+results = batch_predict_outliers(new_data_batch, vae, w2v_model, encoders, threshold=0.05)
+
+# Output results
+for result in results:
+    print(result)
+
+
