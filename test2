@@ -1,0 +1,53 @@
+from sklearn.preprocessing import LabelEncoder
+
+# Apply label encoding to categorical columns
+encoders = {}  # Store encoders for later use
+for col in ['Company', 'Rating', 'Group', 'Industry']:
+    encoders[col] = LabelEncoder()
+    df[col] = encoders[col].fit_transform(df[col])
+
+print(df.head())  # Encoded numerical values
+
+from sklearn.ensemble import IsolationForest
+
+# Train Isolation Forest on historical "good" records
+model = IsolationForest(contamination=0.01, random_state=42)
+model.fit(df)  # Fit on entire dataset (unsupervised)
+
+# Save model and encoders for future use
+import joblib
+joblib.dump(model, "isolation_forest_model.pkl")
+joblib.dump(encoders, "encoders.pkl")
+
+def detect_outliers(new_data, model, encoders):
+    # Convert new data into a DataFrame
+    new_df = pd.DataFrame([new_data])
+
+    # Apply label encoding using trained encoders
+    for col in ['Company', 'Rating', 'Group', 'Industry']:
+        if col in new_df.columns:
+            if col in encoders:
+                new_df[col] = encoders[col].transform(new_df[col])  # Transform using existing encoder
+            else:
+                print(f"Warning: Unknown category detected in column {col}")
+                return "Outlier (Unknown Category)"
+
+    # Predict using the Isolation Forest model
+    prediction = model.predict(new_df)
+
+    return "Outlier" if prediction[0] == -1 else "Normal"
+
+# Load trained model and encoders
+model = joblib.load("isolation_forest_model.pkl")
+encoders = joblib.load("encoders.pkl")
+
+# Example new data (Apple with a D rating)
+new_record = {
+    "Company": "Apple",
+    "Rating": "D",
+    "Group": "Tech",
+    "Industry": "Software"
+}
+
+result = detect_outliers(new_record, model, encoders)
+print(f"Prediction: {result}")  # Should return "Outlier"
