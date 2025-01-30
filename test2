@@ -48,3 +48,5 @@ final_results = pd.concat(outlier_results).reset_index(drop=True)
 # Merge back with original data for readability
 data_with_outliers = data.merge(final_results[['Outlier']], left_index=True, right_index=True)
 print(data_with_outliers)
+
+group['Outlier'] = group['DBSCAN_Label'].apply(lambda x: 'Outlier' if x == -1 else 'Inlier')
