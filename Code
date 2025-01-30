@@ -1,297 +1,34 @@
-import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, Lambda
-from tensorflow.keras.models import Model
-from tensorflow.keras import backend as K
-import numpy as np
-
-# Set the latent space size
-latent_dim = 4  # Adjust based on data complexity
-input_dim = df.shape[1]  # Number of input features
-
-# Define Encoder
-inputs = Input(shape=(input_dim,))
-h = Dense(16, activation='relu')(inputs)
-h = Dense(8, activation='relu')(h)
-
-# Define mean and variance for latent space
-z_mean = Dense(latent_dim)(h)
-z_log_var = Dense(latent_dim)(h)
-
-# Sampling function
-def sampling(args):
-    z_mean, z_log_var = args
-    batch = K.shape(z_mean)[0]
-    dim = K.int_shape(z_mean)[1]
-    epsilon = K.random_normal(shape=(batch, dim))
-    return z_mean + K.exp(0.5 * z_log_var) * epsilon
-
-z = Lambda(sampling, output_shape=(latent_dim,))([z_mean, z_log_var])
-
-# Define Decoder
-decoder_h = Dense(8, activation='relu')
-decoder_h2 = Dense(16, activation='relu')
-decoder_mean = Dense(input_dim, activation='sigmoid')
-
-h_decoded = decoder_h(z)
-h_decoded = decoder_h2(h_decoded)
-outputs = decoder_mean(h_decoded)
-
-# Build VAE model
-vae = Model(inputs, outputs)
-
-# Define Loss Function (Reconstruction Loss + KL Divergence)
-reconstruction_loss = tf.keras.losses.mean_squared_error(inputs, outputs)
-reconstruction_loss = K.sum(reconstruction_loss)
-
-kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
-
-vae_loss = K.mean(reconstruction_loss + kl_loss)
-vae.add_loss(vae_loss)
-
-# Compile and Train the VAE
-vae.compile(optimizer='adam')
-vae.fit(df, df, epochs=50, batch_size=32, shuffle=True, validation_split=0.1)
-
-# Save the trained model
-vae.save("vae_model.h5")
-
-def detect_outliers_vae(new_data, vae, w2v_model, encoders, threshold=0.05):
-    """Detect outliers using VAE-based anomaly detection, returning results with unique identifiers."""
-    
-    unique_id = new_data.pop("Unique_ID")  # Extract unique identifier
-    
-    # Convert company name to vector
-    company_vector = get_company_vector(new_data['Company'], w2v_model)
-
-    # Convert dictionary to DataFrame
-    new_df = pd.DataFrame([new_data])
-
-    # Encode categorical variables
-    for col in ['Rating', 'Group', 'Industry']:
-        if col in new_df.columns and col in encoders:
-            try:
-                new_df[col] = encoders[col].transform(new_df[col])
-            except ValueError:
-                return {"Unique_ID": unique_id, "Prediction": "Outlier (Unknown Category)"}
-
-    # Drop original 'Company' column and add vector representation
-    new_df = new_df.drop(columns=['Company'])
-    new_df = pd.concat([new_df, pd.DataFrame([company_vector])], axis=1)
-
-    # Get VAE reconstructed output
-    reconstructed = vae.predict(new_df)
-    
-    # Compute reconstruction error
-    error = np.mean(np.abs(new_df.values - reconstructed), axis=1)
-
-    # Flag as outlier if error exceeds threshold
-    result = "Outlier" if error[0] > threshold else "Normal"
-
-    return {"Unique_ID": unique_id, "Prediction": result}
-
-
-from tensorflow.keras.models import load_model
-import joblib
-
-# Load trained models
-vae = load_model("vae_model.h5")
-w2v_model = Word2Vec.load("company_w2v.model")
-encoders = joblib.load("encoders.pkl")
-
-# Example new data
-new_record = {
-    "Company": "Apple",
-    "Rating": "D",  # Unusual rating
-    "Group": "Tech",
-    "Industry": "Software"
-}
-
-result = detect_outliers_vae(new_record, vae, w2v_model, encoders, threshold=0.05)
-print(f"Prediction: {result}")  # Likely "Outlier"
-
-
-# Example new data with Unique ID
-new_record = {
-    "Unique_ID": 12345,
-    "Company": "Apple",
-    "Rating": "D",  # Unusual rating
-    "Group": "Tech",
-    "Industry": "Software"
-}
-
-# Detect outlier
-result = detect_outliers_vae(new_record, vae, w2v_model, encoders, threshold=0.05)
-print(result)
-
-
-from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 import numpy as np
-from gensim.models import Word2Vec
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
 
-# Sample Data (Replace with actual dataset)
-data = pd.DataFrame({
-    "Company": ["Apple", "Microsoft", "Tesla", "Apple"],
-    "Rating": ["A", "B", "C", "A"],
-    "Group": ["Tech", "Tech", "Auto", "Tech"],
-    "Industry": ["Software", "Software", "EV", "Software"]
-})
+# Sample DataFrame (replace this with your actual dataset)
+# df = pd.read_csv("your_data.csv")
 
-# Train Word2Vec Model for Company Names
-company_names = data["Company"].unique().tolist()
-w2v_model = Word2Vec(sentences=[[name] for name in company_names], vector_size=10, window=2, min_count=1, workers=4)
+# Assuming df has 3 numerical independent variables and one target variable
+X = df[['num_var1', 'num_var2', 'num_var3']]  # Independent variables
+y = df['target']  # Dependent variable
 
-# Function to convert company names to vector
-def get_company_vector(company):
-    if company in w2v_model.wv:
-        return w2v_model.wv[company]
-    else:
-        return np.zeros(10)  # Default zero vector if unknown company
+# Train-test split (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Convert Company Names to Vectors
-company_vectors = np.array([get_company_vector(company) for company in data["Company"]])
-company_df = pd.DataFrame(company_vectors, columns=[f"Company_{i}" for i in range(10)])
+# Train the Linear Regression model
+model = LinearRegression()
+model.fit(X_train, y_train)
 
-# Encode Categorical Variables
-encoders = {}
-for col in ["Rating", "Group", "Industry"]:
-    le = LabelEncoder()
-    data[col] = le.fit_transform(data[col])
-    encoders[col] = le  # Store encoders for later use
+# Predictions
+y_pred = model.predict(X_test)
 
-# Combine Encoded Data
-data = data.drop(columns=["Company"])
-final_data = pd.concat([data, company_df], axis=1)
+# R^2 score
+r2 = r2_score(y_test, y_pred)
 
-print(final_data.head())  # Check if all features are numeric
+# Adjusted R^2 calculation
+n = X_test.shape[0]  # Number of observations
+p = X_test.shape[1]  # Number of predictors
+adjusted_r2 = 1 - (1 - r2) * (n - 1) / (n - p - 1)
 
-import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, Lambda
-from tensorflow.keras.models import Model
-from tensorflow.keras import backend as K
-
-# Define VAE Model
-latent_dim = 4
-input_dim = final_data.shape[1]
-
-inputs = Input(shape=(input_dim,))
-h = Dense(16, activation='relu')(inputs)
-h = Dense(8, activation='relu')(h)
-
-z_mean = Dense(latent_dim)(h)
-z_log_var = Dense(latent_dim)(h)
-
-def sampling(args):
-    z_mean, z_log_var = args
-    batch = K.shape(z_mean)[0]
-    dim = K.int_shape(z_mean)[1]
-    epsilon = K.random_normal(shape=(batch, dim))
-    return z_mean + K.exp(0.5 * z_log_var) * epsilon
-
-z = Lambda(sampling, output_shape=(latent_dim,))([z_mean, z_log_var])
-
-decoder_h = Dense(8, activation='relu')
-decoder_h2 = Dense(16, activation='relu')
-decoder_mean = Dense(input_dim, activation='sigmoid')
-
-h_decoded = decoder_h(z)
-h_decoded = decoder_h2(h_decoded)
-outputs = decoder_mean(h_decoded)
-
-vae = Model(inputs, outputs)
-
-# Define Loss Function
-reconstruction_loss = tf.keras.losses.mean_squared_error(inputs, outputs)
-reconstruction_loss = K.sum(reconstruction_loss)
-
-kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
-
-vae_loss = K.mean(reconstruction_loss + kl_loss)
-vae.add_loss(vae_loss)
-
-# Train VAE
-vae.compile(optimizer='adam')
-vae.fit(final_data, final_data, epochs=50, batch_size=32, shuffle=True, validation_split=0.1)
-
-# Save Model
-vae.save("vae_model.h5")
-
-
-import numpy as np
-import pandas as pd
-
-def batch_predict_outliers(new_data_batch, vae, w2v_model, encoders, threshold=0.05):
-    """
-    Batch process new records and predict outliers using VAE model.
-    Each record contains a unique identifier, company name, and categorical features.
-    """
-    results = []
-    
-    for new_data in new_data_batch:
-        unique_id = new_data.pop("Unique_ID")  # Extract unique identifier
-        
-        # Convert company name to vector
-        company_vector = get_company_vector(new_data['Company'], w2v_model)
-
-        # Convert dictionary to DataFrame
-        new_df = pd.DataFrame([new_data])
-
-        # Encode categorical variables
-        for col in ['Rating', 'Group', 'Industry']:
-            if col in new_df.columns and col in encoders:
-                try:
-                    new_df[col] = encoders[col].transform(new_df[col])
-                except ValueError:
-                    results.append({"Unique_ID": unique_id, "Prediction": "Outlier (Unknown Category)"})
-                    continue
-
-        # Drop original 'Company' column and add vector representation
-        new_df = new_df.drop(columns=['Company'])
-        new_df = pd.concat([new_df, pd.DataFrame([company_vector])], axis=1)
-
-        # Get VAE reconstructed output
-        reconstructed = vae.predict(new_df)
-
-        # Compute reconstruction error
-        error = np.mean(np.abs(new_df.values - reconstructed), axis=1)
-
-        # Flag as outlier if error exceeds threshold
-        result = "Outlier" if error[0] > threshold else "Normal"
-
-        results.append({"Unique_ID": unique_id, "Prediction": result})
-
-    return results
-
-# Example batch of new data with Unique ID
-new_data_batch = [
-    {
-        "Unique_ID": 12345,
-        "Company": "Apple",
-        "Rating": "A",
-        "Group": "Tech",
-        "Industry": "Software"
-    },
-    {
-        "Unique_ID": 12346,
-        "Company": "Microsoft",
-        "Rating": "B",
-        "Group": "Tech",
-        "Industry": "Software"
-    },
-    {
-        "Unique_ID": 12347,
-        "Company": "Tesla",
-        "Rating": "D",  # Unusual rating
-        "Group": "Auto",
-        "Industry": "EV"
-    }
-]
-
-# Run batch predictions
-results = batch_predict_outliers(new_data_batch, vae, w2v_model, encoders, threshold=0.05)
-
-# Output results
-for result in results:
-    print(result)
-
-
+# Print results
+print(f"R^2 Score: {r2:.4f}")
+print(f"Adjusted R^2 Score: {adjusted_r2:.4f}")
