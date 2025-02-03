@@ -1,34 +1,59 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-# Sample DataFrame (replace this with your actual dataset)
-# df = pd.read_csv("your_data.csv")
+# Sample Data (Replace with your actual dataset)
+data = {
+    'employee_id': [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+    'feature1': [23, 45, 12, 67, 34, 89, 21, 56, 78, 43],
+    'feature2': [5.6, 7.8, 6.5, 8.9, 5.4, 9.1, 6.2, 7.5, 8.3, 5.9],
+    'feature3': [100, 200, 150, 300, 120, 330, 160, 250, 280, 130],
+    'target': [5000, 7000, 4500, 9000, 5200, 9500, 4800, 7600, 8500, 5100]
+}
 
-# Assuming df has 3 numerical independent variables and one target variable
-X = df[['num_var1', 'num_var2', 'num_var3']]  # Independent variables
-y = df['target']  # Dependent variable
+# Create DataFrame
+df = pd.DataFrame(data)
 
-# Train-test split (80% train, 20% test)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Define features (excluding ID) and target
+X = df[['feature1', 'feature2', 'feature3']]
+y = df['target']
+employee_ids = df['employee_id']  # Save Employee IDs
 
-# Train the Linear Regression model
+# Train-Test Split (80% Train, 20% Test)
+X_train, X_test, y_train, y_test, id_train, id_test = train_test_split(
+    X, y, employee_ids, test_size=0.2, random_state=42
+)
+
+# Standardize Features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Train Linear Regression Model
 model = LinearRegression()
-model.fit(X_train, y_train)
+model.fit(X_train_scaled, y_train)
 
 # Predictions
-y_pred = model.predict(X_test)
+y_pred = model.predict(X_test_scaled)
 
-# R^2 score
+# Calculate R² and Adjusted R²
 r2 = r2_score(y_test, y_pred)
-
-# Adjusted R^2 calculation
-n = X_test.shape[0]  # Number of observations
-p = X_test.shape[1]  # Number of predictors
+n = X_test.shape[0]  # Number of test samples
+p = X_test.shape[1]  # Number of predictors (features)
 adjusted_r2 = 1 - (1 - r2) * (n - 1) / (n - p - 1)
 
-# Print results
-print(f"R^2 Score: {r2:.4f}")
-print(f"Adjusted R^2 Score: {adjusted_r2:.4f}")
+# Create result DataFrame with X_test columns
+result_df = X_test.copy()  # Copy original X_test values
+result_df['employee_id'] = id_test.values
+result_df['y_actual'] = y_test.values
+result_df['y_pred'] = y_pred
+
+# Print the result DataFrame
+print(result_df)
+
+# Print R² and Adjusted R²
+print(f"R² Score: {r2:.4f}")
+print(f"Adjusted R² Score: {adjusted_r2:.4f}")
