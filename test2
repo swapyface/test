@@ -1,3 +1,7 @@
+
+
+
+
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder
@@ -41,7 +45,10 @@ for company, group in encoded_df.groupby('Company'):
     
     # Store results
     outlier_results.append(group)
-
+Here are the latest updates:
+	•	Created the batch job for the BESP outlier detection model.
+	•	Conducted analysis, engineered features, and experimented with a few algorithms on the Reference data. The results were not as expected, so I am testing a few more algorithms.
+	•	Developed a model for mortgage data outlier detection and sent the results for analysis.
 # Combine results
 final_results = pd.concat(outlier_results).reset_index(drop=True)
 
