@@ -53,3 +53,22 @@ adjusted_r2 = 1 - (1 - r2) * (n - 1) / (n - p - 1)
 # Print Results
 print(f"R² Score: {r2:.4f}")
 print(f"Adjusted R² Score: {adjusted_r2:.4f}")
+
+
+# Filter data for Day 2
+df_day2 = df[df['date'] == '2024-01-02']
+
+# Scale using the same scaler
+X_test = scaler.transform(df_day2[features])
+y_test = df_day2[target].values
+
+# Predict y values
+y_pred = model.predict(X_test)
+
+# Identify outliers (if absolute error > 10)
+threshold = 10
+df_day2['error'] = np.abs(y_pred - y_test)
+df_day2['outlier'] = df_day2['error'] > threshold
+
+# Print the results
+print(df_day2[['y', 'error', 'outlier']])
