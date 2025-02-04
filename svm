@@ -61,3 +61,85 @@ plt.show()
 # Print evaluation metrics
 print("Evaluation Metrics:")
 print(eval_df.describe())
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics import silhouette_score
+from sklearn.compose import ColumnTransformer
+from kneed import KneeLocator
+
+# Load dataset
+df = pd.read_csv("your_dataset.csv")  # Replace with actual dataset
+
+# Identify categorical and numerical columns
+categorical_cols = ["your_categorical_column1", "your_categorical_column2"]  # Replace with actual categorical columns
+numerical_cols = ["weighted_rating", "your_numerical_column"]  # Add relevant numerical columns
+
+# Column transformer for encoding and scaling
+preprocessor = ColumnTransformer([
+    ("num", StandardScaler(), numerical_cols),
+    ("cat", OneHotEncoder(handle_unknown='ignore'), categorical_cols)
+])
+
+outlier_results = []
+
+# Process each company separately
+for company, group in df.groupby("company_id"):
+    if len(group) < 2:
+        df.loc[group.index, "outlier"] = 0  # Inliers (too few records)
+    else:
+        # Select features for clustering
+        X = group[numerical_cols + categorical_cols]
+        
+        # Transform (scale numerical + encode categorical)
+        X_transformed = preprocessor.fit_transform(X)
+
+        # Step 1: Compute k-nearest neighbor distances (k = min_samples - 1)
+        min_samples = 2  # Minimum samples required to form a cluster
+        k = min_samples - 1
+        nbrs = NearestNeighbors(n_neighbors=k).fit(X_transformed)
+        distances, indices = nbrs.kneighbors(X_transformed)
+
+        # Step 2: Sort the k-distances and find the knee point (elbow method)
+        distances = np.sort(distances[:, -1])  # Get the last (farthest) neighbor distance
+        kneedle = KneeLocator(range(len(distances)), distances, curve="convex", direction="increasing")
+        eps_value = distances[kneedle.knee] if kneedle.knee is not None else np.percentile(distances, 90)
+
+        # Step 3: Run DBSCAN with dynamic eps
+        dbscan = DBSCAN(eps=eps_value, min_samples=min_samples)
+        labels = dbscan.fit_predict(X_transformed)
+
+        # Mark outliers (-1 in DBSCAN means outlier)
+        df.loc[group.index, "outlier"] = (labels == -1).astype(int)
+        
+        # Compute silhouette score if multiple clusters exist
+        if len(set(labels)) > 1 and -1 in labels:
+            sil_score = silhouette_score(X_transformed, labels)
+            outlier_results.append({"company_id": company, "silhouette_score": sil_score, "eps": eps_value})
+
+# Convert results into DataFrame for evaluation
+eval_df = pd.DataFrame(outlier_results)
+
+# **Scatter plot for outlier visualization**
+plt.figure(figsize=(10, 6))
+for company, group in df.groupby("company_id"):
+    plt.scatter(group["company_id"], group["weighted_rating"], 
+                c=group["outlier"].map({0: 'blue', 1: 'red'}), alpha=0.6)
+
+plt.xlabel("Company ID")
+plt.ylabel("Weighted Rating")
+plt.title("Outlier Detection per Company (DBSCAN)")
+plt.show()
+
+# Print evaluation metrics
+print("Evaluation Metrics:")
+print(eval_df.describe())
+
+# Show dynamic eps values per company
+print("Dynamic eps values per company:")
+print(eval_df[['company_id', 'eps']])
