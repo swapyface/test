@@ -1,119 +1,63 @@
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.layers import Input, Dense
-from tensorflow.keras.models import Model
-
-# Define input size based on the dataset
-input_dim = df.shape[1]
-
-# Define Autoencoder Architecture
-input_layer = Input(shape=(input_dim,))
-encoded = Dense(16, activation='relu')(input_layer)
-encoded = Dense(8, activation='relu')(encoded)
-
-decoded = Dense(16, activation='relu')(encoded)
-decoded = Dense(input_dim, activation='sigmoid')(decoded)
-
-autoencoder = Model(input_layer, decoded)
-autoencoder.compile(optimizer='adam', loss='mse')
-
-# Train Autoencoder on normal (good) data
-autoencoder.fit(df, df, epochs=50, batch_size=32, shuffle=True, validation_split=0.1)
-
-# Save trained model
-autoencoder.save("autoencoder_model.h5")
-joblib.dump(encoders, "encoders.pkl")
 import pandas as pd
-from gensim.models import Word2Vec
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.metrics import silhouette_score
+from sklearn.compose import ColumnTransformer
 
 # Load dataset
-df = pd.read_csv("historical_data.csv")
+df = pd.read_csv("your_dataset.csv")  # Replace with actual dataset
 
-# Convert company names into a list of words
-company_names = df['Company'].astype(str).apply(lambda x: x.split()).tolist()
+# Identify categorical and numerical columns
+categorical_cols = ["your_categorical_column1", "your_categorical_column2"]  # Replace with actual categorical columns
+numerical_cols = ["weighted_rating", "your_numerical_column"]  # Add relevant numerical columns
 
-# Train Word2Vec model
-w2v_model = Word2Vec(sentences=company_names, vector_size=10, window=5, min_count=1, workers=4)
+# Column transformer for encoding and scaling
+preprocessor = ColumnTransformer([
+    ("num", StandardScaler(), numerical_cols),
+    ("cat", OneHotEncoder(handle_unknown='ignore'), categorical_cols)
+])
 
-# Save the trained Word2Vec model
-w2v_model.save("company_w2v.model")
+outlier_results = []
 
-
-def get_company_vector(company_name, model):
-    """Convert a company name to its Word2Vec vector representation."""
-    words = company_name.split()
-    vectors = [model.wv[word] for word in words if word in model.wv]
-    
-    if vectors:
-        return np.mean(vectors, axis=0)  # Average word vectors if multiple words
+# Process each company separately
+for company, group in df.groupby("company_id"):
+    if len(group) < 2:
+        df.loc[group.index, "outlier"] = 0  # Inliers (too few records)
     else:
-        return np.zeros(model.vector_size)  # Return zero vector if unseen word
+        # Select features for clustering
+        X = group[numerical_cols + categorical_cols]
+        
+        # Transform (scale numerical + encode categorical)
+        X_transformed = preprocessor.fit_transform(X)
+        
+        # Run DBSCAN
+        dbscan = DBSCAN(eps=0.5, min_samples=2)
+        labels = dbscan.fit_predict(X_transformed)
+        
+        # Mark outliers (-1 in DBSCAN means outlier)
+        df.loc[group.index, "outlier"] = (labels == -1).astype(int)
+        
+        # Compute silhouette score if multiple clusters exist
+        if len(set(labels)) > 1 and -1 in labels:
+            sil_score = silhouette_score(X_transformed, labels)
+            outlier_results.append({"company_id": company, "silhouette_score": sil_score})
 
-# Load Word2Vec model
-w2v_model = Word2Vec.load("company_w2v.model")
+# Convert results into DataFrame for evaluation
+eval_df = pd.DataFrame(outlier_results)
 
-# Convert company names to vectors
-df['Company_Vector'] = df['Company'].apply(lambda x: get_company_vector(x, w2v_model))
+# **Scatter plot for outlier visualization**
+plt.figure(figsize=(10, 6))
+for company, group in df.groupby("company_id"):
+    plt.scatter(group["company_id"], group["weighted_rating"], 
+                c=group["outlier"].map({0: 'blue', 1: 'red'}), alpha=0.6)
 
-# Expand vector columns
-company_vec_df = pd.DataFrame(df['Company_Vector'].tolist(), index=df.index)
-df = pd.concat([df, company_vec_df], axis=1)
+plt.xlabel("Company ID")
+plt.ylabel("Weighted Rating")
+plt.title("Outlier Detection per Company (DBSCAN)")
+plt.show()
 
-# Drop original 'Company' column
-df.drop(columns=['Company', 'Company_Vector'], inplace=True)
-
-
-from sklearn.preprocessing import LabelEncoder
-
-encoders = {}
-
-for col in ['Rating', 'Group', 'Industry']:
-    encoders[col] = LabelEncoder()
-    df[col] = encoders[col].fit_transform(df[col])
-
-def detect_outliers_autoencoder(new_data, autoencoder, w2v_model, encoders, threshold=0.05):
-    """Detect outliers using autoencoder reconstruction error."""
-    
-    # Convert company name to vector
-    company_vector = get_company_vector(new_data['Company'], w2v_model)
-
-    # Convert dictionary to DataFrame
-    new_df = pd.DataFrame([new_data])
-
-    # Encode categorical variables
-    for col in ['Rating', 'Group', 'Industry']:
-        if col in new_df.columns and col in encoders:
-            try:
-                new_df[col] = encoders[col].transform(new_df[col])
-            except ValueError:
-                print(f"Warning: Unknown category in {col}")
-                return "Outlier (Unknown Category)"
-
-    # Drop original 'Company' column and add vector representation
-    new_df = new_df.drop(columns=['Company'])
-    new_df = pd.concat([new_df, pd.DataFrame([company_vector])], axis=1)
-
-    # Compute reconstruction error
-    reconstructed = autoencoder.predict(new_df)
-    error = np.mean(np.abs(new_df.values - reconstructed), axis=1)
-
-    # Flag as outlier if error is above threshold
-    return "Outlier" if error[0] > threshold else "Normal"
-
-
-# Load trained models
-autoencoder = keras.models.load_model("autoencoder_model.h5")
-w2v_model = Word2Vec.load("company_w2v.model")
-encoders = joblib.load("encoders.pkl")
-
-# Example new data
-new_record = {
-    "Company": "Apple",
-    "Rating": "D",
-    "Group": "Tech",
-    "Industry": "Software"
-}
-
-result = detect_outliers_autoencoder(new_record, autoencoder, w2v_model, encoders)
-print(f"Prediction: {result}")  # Should return "Outlier"
+# Print evaluation metrics
+print("Evaluation Metrics:")
+print(eval_df.describe())
