@@ -55,3 +55,20 @@ df['up-date'] = pd.to_datetime(df['up-date'], format='%d-%b-%Y')
 df['up-date'] = df['up-date'].dt.strftime('%Y-%m-%d')
 
 print(df)
+
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+import matplotlib.pyplot as plt
+
+k = 5  # Set k = min_samples (start with 5)
+nbrs = NearestNeighbors(n_neighbors=k).fit(X_scaled)
+distances, indices = nbrs.kneighbors(X_scaled)
+
+# Sort and plot the k-th nearest neighbor distances
+distances = np.sort(distances[:, k-1])  # k-th distance for each point
+plt.plot(distances)
+plt.xlabel("Points sorted by distance")
+plt.ylabel(f"{k}-th Nearest Neighbor Distance")
+plt.title("Elbow Method for Choosing eps")
+plt.show()
+
