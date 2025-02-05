@@ -41,3 +41,17 @@ y_pred = model.predict(X_test_scaled)
 # Print Unique ID with Actual and Predicted Values
 result_df = pd.DataFrame({'employee_id': id_test, 'y_actual': y_test, 'y_pred': y_pred})
 print(result_df)
+
+
+import pandas as pd
+
+# Sample data
+df = pd.DataFrame({'up-date': ['31-mar-2025']})
+
+# Convert to datetime format
+df['up-date'] = pd.to_datetime(df['up-date'], format='%d-%b-%Y')
+
+# Change to 'YYYY-MM-DD' format
+df['up-date'] = df['up-date'].dt.strftime('%Y-%m-%d')
+
+print(df)
