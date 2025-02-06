@@ -106,4 +106,13 @@ for issuer, group in df.groupby("issuer"):
     threshold = thresholds[issuer]
     df.loc[group.index, "is_outlier"] = group["weighted_rating"] > threshold  # Mark only extreme cases
 
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
+# Fit K-Means
+kmeans = KMeans(n_clusters=3, random_state=42)
+labels = kmeans.fit_predict(data)
+
+# Compute Silhouette Score
+silhouette_avg = silhouette_score(data, labels)
+print(f"Silhouette Score: {silhouette_avg}")
