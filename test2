@@ -71,4 +71,39 @@ plt.xlabel("Points sorted by distance")
 plt.ylabel(f"{k}-th Nearest Neighbor Distance")
 plt.title("Elbow Method for Choosing eps")
 plt.show()
+import numpy as np
+from sklearn.cluster import DBSCAN
+
+def get_eps(values, scale=1.5):
+    """Compute adaptive eps using MAD (Median Absolute Deviation)."""
+    median = np.median(values)
+    mad = np.median(np.abs(values - median))
+    return mad * scale  # Adjust scale based on tolerance
+
+eps_dict = {}  # Store per-issuer eps values
+for issuer, group in df.groupby("issuer"):  # Replace "issuer" with your column
+    eps_dict[issuer] = get_eps(group["weighted_rating"])  # Replace with relevant column
+
+# Apply DBSCAN separately for each issuer
+df["dbscan_label"] = -1  # Default to outlier
+for issuer, group in df.groupby("issuer"):
+    eps_value = eps_dict[issuer]
+    dbscan = DBSCAN(eps=eps_value, min_samples=2)  # Keep min_samples low
+    labels = dbscan.fit_predict(group[["weighted_rating"]])  # Ensure proper feature selection
+    df.loc[group.index, "dbscan_label"] = labels
+
+2----
+import scipy.stats as stats
+
+def get_threshold(values, percentile=99):
+    """Compute outlier threshold using percentiles."""
+    return np.percentile(values, percentile)
+
+thresholds = {issuer: get_threshold(group["weighted_rating"]) for issuer, group in df.groupby("issuer")}
+
+df["is_outlier"] = False
+for issuer, group in df.groupby("issuer"):
+    threshold = thresholds[issuer]
+    df.loc[group.index, "is_outlier"] = group["weighted_rating"] > threshold  # Mark only extreme cases
+
 
