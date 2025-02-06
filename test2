@@ -116,3 +116,10 @@ labels = kmeans.fit_predict(data)
 # Compute Silhouette Score
 silhouette_avg = silhouette_score(data, labels)
 print(f"Silhouette Score: {silhouette_avg}")
+
+def get_eps(values, scale=1.5, min_eps=0.1):  
+    median = np.median(values)
+    mad = np.median(np.abs(values - median))
+    std_dev = np.std(values)  # Standard deviation as a backup
+    return max(mad * scale, std_dev * 0.5, min_eps)  # Choose the largest reasonable value
+
