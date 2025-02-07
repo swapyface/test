@@ -1,145 +1,60 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.metrics import silhouette_score
-from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVR
+from xgboost import XGBRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # Load dataset
-df = pd.read_csv("your_dataset.csv")  # Replace with actual dataset
+df = pd.read_csv("your_dataset.csv")  # Replace with actual dataset path
 
-# Identify categorical and numerical columns
-categorical_cols = ["your_categorical_column1", "your_categorical_column2"]  # Replace with actual categorical columns
-numerical_cols = ["weighted_rating", "your_numerical_column"]  # Add relevant numerical columns
+# Feature selection
+X = df[['face_value', 'factor', 'price']]
+y = df['market_value']
 
-# Column transformer for encoding and scaling
-preprocessor = ColumnTransformer([
-    ("num", StandardScaler(), numerical_cols),
-    ("cat", OneHotEncoder(handle_unknown='ignore'), categorical_cols)
-])
+# Split data into training and testing
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-outlier_results = []
+# Initialize models
+models = {
+    "Linear Regression": LinearRegression(),
+    "XGBoost": XGBRegressor(objective="reg:squarederror", random_state=42),
+    "SVR": SVR(kernel='rbf')
+}
 
-# Process each company separately
-for company, group in df.groupby("company_id"):
-    if len(group) < 2:
-        df.loc[group.index, "outlier"] = 0  # Inliers (too few records)
-    else:
-        # Select features for clustering
-        X = group[numerical_cols + categorical_cols]
-        
-        # Transform (scale numerical + encode categorical)
-        X_transformed = preprocessor.fit_transform(X)
-        
-        # Run DBSCAN
-        dbscan = DBSCAN(eps=0.5, min_samples=2)
-        labels = dbscan.fit_predict(X_transformed)
-        
-        # Mark outliers (-1 in DBSCAN means outlier)
-        df.loc[group.index, "outlier"] = (labels == -1).astype(int)
-        
-        # Compute silhouette score if multiple clusters exist
-        if len(set(labels)) > 1 and -1 in labels:
-            sil_score = silhouette_score(X_transformed, labels)
-            outlier_results.append({"company_id": company, "silhouette_score": sil_score})
+# Train and evaluate each model
+results = {}
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
 
-# Convert results into DataFrame for evaluation
-eval_df = pd.DataFrame(outlier_results)
+    results[name] = {"RMSE": rmse, "MAE": mae, "R2": r2}
+    print(f"Model: {name} | RMSE: {rmse:.4f} | MAE: {mae:.4f} | R²: {r2:.4f}")
 
-# **Scatter plot for outlier visualization**
-plt.figure(figsize=(10, 6))
-for company, group in df.groupby("company_id"):
-    plt.scatter(group["company_id"], group["weighted_rating"], 
-                c=group["outlier"].map({0: 'blue', 1: 'red'}), alpha=0.6)
+# Select best model based on RMSE
+best_model_name = min(results, key=lambda k: results[k]["RMSE"])
+best_model = models[best_model_name]
+print(f"\nBest Model: {best_model_name}")
 
-plt.xlabel("Company ID")
-plt.ylabel("Weighted Rating")
-plt.title("Outlier Detection per Company (DBSCAN)")
+# Use best model to predict Market Value
+df["predicted_market_value"] = best_model.predict(X)
+
+# Flag outliers where prediction doesn't match batch-generated value
+threshold = 0.05  # Set deviation threshold (5% difference)
+df["is_outlier"] = np.abs(df["predicted_market_value"] - df["market_value"]) > (threshold * df["market_value"])
+
+# Save the results
+df.to_csv("market_value_predictions.csv", index=False)
+
+# Plot actual vs predicted values
+plt.scatter(df["market_value"], df["predicted_market_value"], c=df["is_outlier"].map({True: "red", False: "blue"}), alpha=0.5)
+plt.xlabel("Actual Market Value")
+plt.ylabel("Predicted Market Value")
+plt.title(f"{best_model_name} - Predicted vs Actual Market Value")
 plt.show()
-
-# Print evaluation metrics
-print("Evaluation Metrics:")
-print(eval_df.describe())
-
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.neighbors import NearestNeighbors
-from sklearn.metrics import silhouette_score
-from sklearn.compose import ColumnTransformer
-from kneed import KneeLocator
-
-# Load dataset
-df = pd.read_csv("your_dataset.csv")  # Replace with actual dataset
-
-# Identify categorical and numerical columns
-categorical_cols = ["your_categorical_column1", "your_categorical_column2"]  # Replace with actual categorical columns
-numerical_cols = ["weighted_rating", "your_numerical_column"]  # Add relevant numerical columns
-
-# Column transformer for encoding and scaling
-preprocessor = ColumnTransformer([
-    ("num", StandardScaler(), numerical_cols),
-    ("cat", OneHotEncoder(handle_unknown='ignore'), categorical_cols)
-])
-
-outlier_results = []
-
-# Process each company separately
-for company, group in df.groupby("company_id"):
-    if len(group) < 2:
-        df.loc[group.index, "outlier"] = 0  # Inliers (too few records)
-    else:
-        # Select features for clustering
-        X = group[numerical_cols + categorical_cols]
-        
-        # Transform (scale numerical + encode categorical)
-        X_transformed = preprocessor.fit_transform(X)
-
-        # Step 1: Compute k-nearest neighbor distances (k = min_samples - 1)
-        min_samples = 2  # Minimum samples required to form a cluster
-        k = min_samples - 1
-        nbrs = NearestNeighbors(n_neighbors=k).fit(X_transformed)
-        distances, indices = nbrs.kneighbors(X_transformed)
-
-        # Step 2: Sort the k-distances and find the knee point (elbow method)
-        distances = np.sort(distances[:, -1])  # Get the last (farthest) neighbor distance
-        kneedle = KneeLocator(range(len(distances)), distances, curve="convex", direction="increasing")
-        eps_value = distances[kneedle.knee] if kneedle.knee is not None else np.percentile(distances, 90)
-
-        # Step 3: Run DBSCAN with dynamic eps
-        dbscan = DBSCAN(eps=eps_value, min_samples=min_samples)
-        labels = dbscan.fit_predict(X_transformed)
-
-        # Mark outliers (-1 in DBSCAN means outlier)
-        df.loc[group.index, "outlier"] = (labels == -1).astype(int)
-        
-        # Compute silhouette score if multiple clusters exist
-        if len(set(labels)) > 1 and -1 in labels:
-            sil_score = silhouette_score(X_transformed, labels)
-            outlier_results.append({"company_id": company, "silhouette_score": sil_score, "eps": eps_value})
-
-# Convert results into DataFrame for evaluation
-eval_df = pd.DataFrame(outlier_results)
-
-# **Scatter plot for outlier visualization**
-plt.figure(figsize=(10, 6))
-for company, group in df.groupby("company_id"):
-    plt.scatter(group["company_id"], group["weighted_rating"], 
-                c=group["outlier"].map({0: 'blue', 1: 'red'}), alpha=0.6)
-
-plt.xlabel("Company ID")
-plt.ylabel("Weighted Rating")
-plt.title("Outlier Detection per Company (DBSCAN)")
-plt.show()
-
-# Print evaluation metrics
-print("Evaluation Metrics:")
-print(eval_df.describe())
-
-# Show dynamic eps values per company
-print("Dynamic eps values per company:")
-print(eval_df[['company_id', 'eps']])
