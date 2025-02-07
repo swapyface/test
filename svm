@@ -35,6 +35,44 @@ new_data = np.array([[50000, 1.2, 105]])  # Example input
 # Scale the new data
 new_data_scaled = scaler.transform(new_data)
 
+
+
+import pandas as pd
+import numpy as np
+import joblib
+
+# Load the fine-tuned XGBoost model and scaler
+model = joblib.load("fine_tuned_xgb_model.pkl")
+scaler = joblib.load("scaler.pkl")
+
+# Load the dataset (Ensure it contains 'book_id', 'asset_id', 'given_market_value', 'face_value', 'factor', 'price')
+df = pd.read_csv("new_dataset.csv")
+
+# Extract relevant columns
+X = df[["face_value", "factor", "price"]]
+given_market_value = df["given_market_value"]
+
+# Scale features
+X_scaled = scaler.transform(X)
+
+# Predict market value using the trained model
+df["predicted_market_value"] = model.predict(X_scaled)
+
+# Calculate percentage difference
+df["percentage_diff"] = abs(df["predicted_market_value"] - given_market_value) / given_market_value * 100
+
+# Flag records as outliers or inliers based on 2% difference threshold
+df["outlier_flag"] = df["percentage_diff"].apply(lambda x: "Outlier" if x > 2 else "Inlier")
+
+# Select relevant columns for output
+result_df = df[["book_id", "asset_id", "given_market_value", "predicted_market_value", "percentage_diff", "outlier_flag"]]
+
+# Save results to a CSV file
+result_df.to_csv("market_value_outliers.csv", index=False)
+
+print("\n✅ Outlier Detection Completed. Results saved in 'market_value_outliers.csv'")
+
+
 # Predict Market Value
 predicted_market_value = model.predict(new_data_scaled)
 print("Predicted Market Value:", predicted_market_value[0])
