@@ -76,3 +76,8 @@ print("\n✅ Outlier Detection Completed. Results saved in 'market_value_outlier
 # Predict Market Value
 predicted_market_value = model.predict(new_data_scaled)
 print("Predicted Market Value:", predicted_market_value[0])
+
+
+
+
+df["comment"] = df.apply(lambda row: "excluded" if pd.isnull(row["col1"]) or pd.isnull(row["col2"]) else None, axis=1)
