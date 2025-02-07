@@ -80,4 +80,6 @@ print("Predicted Market Value:", predicted_market_value[0])
 
 
 
-df["comment"] = df.apply(lambda row: "excluded" if pd.isnull(row["col1"]) or pd.isnull(row["col2"]) else None, axis=1)
+col_list = ["col1", "col2", "col3"]  # Your list of columns
+df["comment"] = df[col_list].isnull().any(axis=1).map({True: "excluded", False: None})
+
