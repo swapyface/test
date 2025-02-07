@@ -79,7 +79,5 @@ print("Predicted Market Value:", predicted_market_value[0])
 
 
 
-
-col_list = ["col1", "col2", "col3"]  # Your list of columns
-df["comment"] = df[col_list].isnull().any(axis=1).map({True: "excluded", False: None})
-
+df["comment"] = np.where(df[col_list].isnull().any(axis=1), "values are null", None)
+df["Result"] = np.where(df[col_list].isnull().any(axis=1), "excluded", None)
