@@ -79,3 +79,45 @@ print(f"\nShapiro-Wilk Test for Market Value: statistic={statistic}, p-value={p_
 from scipy.stats import pearsonr
 correlation, p_value = pearsonr(data['Original Face'], data['Market Value'])
 print(f"\nPearsons correlation between Original Face and Market Value: correlation={correlation}, p-value={p_value}")
+
+
+import pandas as pd
+import numpy as np
+
+# Number of data points to generate
+num_samples = 1000  # Adjust as needed
+
+# Define ranges for your independent variables (features)
+original_face_range = (10, 1000)  # Example range
+factor_value_range = (0.5, 5.0)  # Example range
+price_range = (50, 500)       # Example range
+
+# Generate random data within the specified ranges
+original_face = np.random.uniform(original_face_range[0], original_face_range[1], num_samples)
+factor_value = np.random.uniform(factor_value_range[0], factor_value_range[1], num_samples)
+price = np.random.uniform(price_range[0], price_range[1], num_samples)
+
+# Calculate the dependent variable (target) using your formula
+market_value = (original_face * factor_value * price) / 100
+
+# Create a Pandas DataFrame
+data = pd.DataFrame({
+    'Original Face': original_face,
+    'Factor Value': factor_value,
+    'Price': price,
+    'Market Value': market_value
+})
+
+# (Optional) Add some random noise to the Market Value to simulate real-world data
+noise_level = 0.05  # 5% noise
+noise = np.random.normal(0, market_value * noise_level, num_samples) #Noise proportional to market value
+data['Market Value'] = data['Market Value'] + noise
+
+# Save to CSV (optional)
+data.to_csv('your_data.csv', index=False)
+
+# Display the first few rows of the DataFrame
+print(data.head())
+
+# Display descriptive statistics
+print(data.describe())
