@@ -1,41 +1,56 @@
 import pandas as pd
+import numpy as np  # Import numpy for NaN handling
 
 def identify_market_value_outliers(df, tolerance=0.05):
     """
     Calculates Market Value, identifies outliers, and returns a DataFrame with outlier flags.
+    Handles Factor Analytic values of 0 and 1.
 
     Args:
         df: Pandas DataFrame with 'Original Face', 'Factor Analytic', 'Price', and 'Market Value' columns.
         tolerance: The percentage tolerance for outlier identification (default: 0.05 or 5%).
 
     Returns:
-        Pandas DataFrame with an added 'Outlier' column (True for outlier, False for inlier).
+        Pandas DataFrame with added 'Calculated Market Value', 'Percentage Difference', and 'Outlier' columns.
     """
 
-    # Calculate Market Value
-    df['Calculated Market Value'] = (df['Original Face'] * df['Factor Analytic'] * df['Price']) / 100
+    # Replace 0 with 1 in 'Factor Analytic'
+    df['Factor Analytic'] = df['Factor Analytic'].replace(0, 1)
 
-    # Calculate percentage difference
-    df['Percentage Difference'] = abs((df['Calculated Market Value'] - df['Market Value']) / df['Market Value']) * 100
+
+    # Calculate Market Value (handling Factor Analytic == 1)
+    df['Calculated Market Value'] = np.where(
+        df['Factor Analytic'] == 1,
+        df['Original Face'] * df['Price'],  # No division by 100
+        (df['Original Face'] * df['Factor Analytic'] * df['Price']) / 100
+    )
+
+
+    # Calculate percentage difference (handle potential division by zero)
+    df['Percentage Difference'] = np.where(
+        df['Market Value'] == 0, #Check for zero market value
+        np.inf, #If Market value is zero, percentage difference is infinite
+        abs((df['Calculated Market Value'] - df['Market Value']) / df['Market Value']) * 100
+    )
 
     # Identify outliers
-    df['Outlier'] = df['Percentage Difference'] > (tolerance * 100)  # Convert tolerance to percentage
+    df['Outlier'] = df['Percentage Difference'] > (tolerance * 100)
 
     return df
 
 
 def main():
-    # Load your data (replace 'your_file.xlsx' with your actual file path)
     try:
-        df = pd.read_excel('your_file.xlsx')  # Or pd.read_csv('your_file.csv') if it's a CSV
+        df = pd.read_excel('your_file.xlsx') 
     except FileNotFoundError:
         print("Error: File not found. Please provide the correct file path.")
         return
+    except Exception as e: # Catch other potential errors during file reading
+        print(f"Error reading file: {e}")
+        return
 
-    # Identify outliers
     df = identify_market_value_outliers(df)
 
-    # Save the results to a new Excel file (replace 'output_file.xlsx' with your desired file name)
     try:
         df.to_excel('output_file.xlsx', index=False)
         print("Results saved to output_file.xlsx")
