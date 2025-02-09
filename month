@@ -1,111 +1,81 @@
-df[f'{col}Encoded'] = label_encoder.fit_transform(df[col])
-from gensim.models import Word2Vec
-
-# Create sequences of ratings for Word2Vec
-rating_sequences = df.groupby('Company')['Rating'].apply(list).tolist()
-
-# Train Word2Vec model
-w2v_model = Word2Vec(sentences=rating_sequences, vector_size=10, window=3, min_count=1, workers=4)
-
-# Get embedding for a specific company
-company_embedding = w2v_model.wv['A']  # Example embedding for rating 'A'
-print(company_embedding)
-
-
-grouped_data = df.groupby('Company')['Rating'].apply(list)
-print(grouped_data.head())
-
-# Output example:
-# Company_A: ['A', 'BBB']
-# Company_B: ['AA', 'A']
-
-
-# Get average embedding for each company's historical ratings
-def get_company_embedding(ratings):
-    vectors = [w2v_model.wv[r] for r in ratings if r in w2v_model.wv]
-    return np.mean(vectors, axis=0) if vectors else np.zeros(w2v_model.vector_size)
-
-df['CompanyEmbedding'] = df['Company'].map(
-    lambda company: get_company_embedding(grouped_data[company])
-)
-
-# Embedding example
-print(df['CompanyEmbedding'].head())
-
-
-from sklearn.ensemble import IsolationForest
-
-# Combine embedding features with other features
-X = pd.concat([df[['IndustryEncoded', 'TimeToMaturity']], pd.DataFrame(df['CompanyEmbedding'].tolist())], axis=1)
-
-# Fit Isolation Forest
-model = IsolationForest(contamination=0.05, random_state=42)
-df['Outlier'] = model.fit_predict(X)
-
-
+import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-def create_sequences(data, sequence_length):
-    sequences = []
-    for i in range(len(data) - sequence_length + 1):
-        seq = data[i:i+sequence_length]
-        sequences.append(seq)
-    return np.array(sequences)
+# Load your data (replace 'your_data.csv' with your file)
+data = pd.read_csv('your_data.csv')
 
-# Group by company and prepare sequences
-sequence_length = 5  # Number of historical steps
-features = ['RatingEncoded', 'TimeToMaturity']  # Features for LSTM
+# 1. Descriptive Statistics:
+print("Descriptive Statistics:")
+print(data.describe())
 
-sequences = []
-for company, group in df.groupby('Company'):
-    company_data = group[features].values
-    company_sequences = create_sequences(company_data, sequence_length)
-    sequences.extend(company_sequences)
+# 2. Histograms:
+data.hist(figsize=(12, 8))  # Adjust figure size as needed
+plt.suptitle("Histograms of Features", fontsize=16) # Add a title
+plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to prevent title from overlapping
+plt.show()
 
-sequences = np.array(sequences)  # Shape: (num_sequences, sequence_length, num_features)
-
-
-
-
-import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, LSTM, RepeatVector, TimeDistributed, Dense
-
-# Define model parameters
-input_dim = sequences.shape[2]  # Number of features
-latent_dim = 64  # Dimensionality of embeddings
-
-# LSTM Autoencoder
-inputs = Input(shape=(sequence_length, input_dim))
-encoded = LSTM(latent_dim, activation='relu')(inputs)
-decoded = RepeatVector(sequence_length)(encoded)
-decoded = LSTM(input_dim, activation='relu', return_sequences=True)(decoded)
-
-# Model
-autoencoder = Model(inputs, decoded)
-autoencoder.compile(optimizer='adam', loss='mse')
-
-# Train the model
-autoencoder.fit(sequences, sequences, epochs=50, batch_size=32, validation_split=0.2)
+# 3. Box Plots (for outlier detection):
+plt.figure(figsize=(10, 6))
+sns.boxplot(data=data)
+plt.title("Box Plots of Features")
+plt.xticks(rotation=45, ha='right') # Rotate x-axis labels if needed
+plt.tight_layout()
+plt.show()
 
 
-# Create an encoder model to extract embeddings
-encoder = Model(inputs, encoded)
+# 4. Scatter Plots (to visualize relationships between features and target):
+for feature in data.columns[:-1]:  # Exclude the last column (target)
+    plt.figure(figsize=(8, 6))
+    plt.scatter(data[feature], data['Market Value'])
+    plt.xlabel(feature)
+    plt.ylabel('Market Value')
+    plt.title(f'Scatter Plot of Market Value vs. {feature}')
+    plt.tight_layout()
+    plt.show()
 
-# Get embeddings for all sequences
-embeddings = encoder.predict(sequences)
-print(embeddings.shape)  # Shape: (num_sequences, latent_dim)
+# 5. Correlation Matrix (to see linear relationships):
+correlation_matrix = data.corr()
+plt.figure(figsize=(8, 6))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title('Correlation Matrix')
+plt.tight_layout()
+plt.show()
 
+# 6. Skewness and Kurtosis:
+print("\nSkewness:")
+print(data.skew())
+print("\nKurtosis:")
+print(data.kurt())
 
-# Get reconstructed sequences
-reconstructed_sequences = autoencoder.predict(sequences)
+# 7. Check for Missing Values:
+print("\nMissing Values:")
+print(data.isnull().sum())
 
-# Calculate reconstruction errors
-errors = np.mean((sequences - reconstructed_sequences) ** 2, axis=(1, 2))
+# 8. Value Counts (for categorical features, if any):
+# If you have categorical features, use this:
+# for column in data.select_dtypes(include='object'): # Select object type columns
+#     print(f"\nValue Counts for {column}:")
+#     print(data[column].value_counts())
 
-# Set a threshold for anomalies (e.g., based on 95th percentile)
-threshold = np.percentile(errors, 95)
-anomalies = errors > threshold
+# 9. Quantile Analysis (for understanding data distribution):
+print("\nQuantiles:")
+print(data.quantile([0.05, 0.25, 0.5, 0.75, 0.95])) # Example quantiles
 
-# Map anomalies back to companies
-print("Anomalies:", anomalies)
+# 10. Pair Plots (for visualizing relationships between all pairs of variables):
+sns.pairplot(data)
+plt.suptitle("Pair Plots of All Variables", fontsize=16) # Add a title
+plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to prevent title from overlapping
+plt.show()
+
+# 11. Statistical Tests (Examples):
+# Example: Check for normality of 'Market Value' using Shapiro-Wilk test
+from scipy.stats import shapiro
+statistic, p_value = shapiro(data['Market Value'])
+print(f"\nShapiro-Wilk Test for Market Value: statistic={statistic}, p-value={p_value}")
+
+# Example: Check for correlation between two features
+from scipy.stats import pearsonr
+correlation, p_value = pearsonr(data['Original Face'], data['Market Value'])
+print(f"\nPearsons correlation between Original Face and Market Value: correlation={correlation}, p-value={p_value}")
