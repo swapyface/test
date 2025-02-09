@@ -1,123 +1,47 @@
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Load your data (replace 'your_data.csv' with your file)
-data = pd.read_csv('your_data.csv')
+def identify_market_value_outliers(df, tolerance=0.05):
+    """
+    Calculates Market Value, identifies outliers, and returns a DataFrame with outlier flags.
 
-# 1. Descriptive Statistics:
-print("Descriptive Statistics:")
-print(data.describe())
+    Args:
+        df: Pandas DataFrame with 'Original Face', 'Factor Analytic', 'Price', and 'Market Value' columns.
+        tolerance: The percentage tolerance for outlier identification (default: 0.05 or 5%).
 
-# 2. Histograms:
-data.hist(figsize=(12, 8))  # Adjust figure size as needed
-plt.suptitle("Histograms of Features", fontsize=16) # Add a title
-plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to prevent title from overlapping
-plt.show()
+    Returns:
+        Pandas DataFrame with an added 'Outlier' column (True for outlier, False for inlier).
+    """
 
-# 3. Box Plots (for outlier detection):
-plt.figure(figsize=(10, 6))
-sns.boxplot(data=data)
-plt.title("Box Plots of Features")
-plt.xticks(rotation=45, ha='right') # Rotate x-axis labels if needed
-plt.tight_layout()
-plt.show()
+    # Calculate Market Value
+    df['Calculated Market Value'] = (df['Original Face'] * df['Factor Analytic'] * df['Price']) / 100
 
+    # Calculate percentage difference
+    df['Percentage Difference'] = abs((df['Calculated Market Value'] - df['Market Value']) / df['Market Value']) * 100
 
-# 4. Scatter Plots (to visualize relationships between features and target):
-for feature in data.columns[:-1]:  # Exclude the last column (target)
-    plt.figure(figsize=(8, 6))
-    plt.scatter(data[feature], data['Market Value'])
-    plt.xlabel(feature)
-    plt.ylabel('Market Value')
-    plt.title(f'Scatter Plot of Market Value vs. {feature}')
-    plt.tight_layout()
-    plt.show()
+    # Identify outliers
+    df['Outlier'] = df['Percentage Difference'] > (tolerance * 100)  # Convert tolerance to percentage
 
-# 5. Correlation Matrix (to see linear relationships):
-correlation_matrix = data.corr()
-plt.figure(figsize=(8, 6))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
-plt.title('Correlation Matrix')
-plt.tight_layout()
-plt.show()
-
-# 6. Skewness and Kurtosis:
-print("\nSkewness:")
-print(data.skew())
-print("\nKurtosis:")
-print(data.kurt())
-
-# 7. Check for Missing Values:
-print("\nMissing Values:")
-print(data.isnull().sum())
-
-# 8. Value Counts (for categorical features, if any):
-# If you have categorical features, use this:
-# for column in data.select_dtypes(include='object'): # Select object type columns
-#     print(f"\nValue Counts for {column}:")
-#     print(data[column].value_counts())
-
-# 9. Quantile Analysis (for understanding data distribution):
-print("\nQuantiles:")
-print(data.quantile([0.05, 0.25, 0.5, 0.75, 0.95])) # Example quantiles
-
-# 10. Pair Plots (for visualizing relationships between all pairs of variables):
-sns.pairplot(data)
-plt.suptitle("Pair Plots of All Variables", fontsize=16) # Add a title
-plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to prevent title from overlapping
-plt.show()
-
-# 11. Statistical Tests (Examples):
-# Example: Check for normality of 'Market Value' using Shapiro-Wilk test
-from scipy.stats import shapiro
-statistic, p_value = shapiro(data['Market Value'])
-print(f"\nShapiro-Wilk Test for Market Value: statistic={statistic}, p-value={p_value}")
-
-# Example: Check for correlation between two features
-from scipy.stats import pearsonr
-correlation, p_value = pearsonr(data['Original Face'], data['Market Value'])
-print(f"\nPearsons correlation between Original Face and Market Value: correlation={correlation}, p-value={p_value}")
+    return df
 
 
-import pandas as pd
-import numpy as np
+def main():
+    # Load your data (replace 'your_file.xlsx' with your actual file path)
+    try:
+        df = pd.read_excel('your_file.xlsx')  # Or pd.read_csv('your_file.csv') if it's a CSV
+    except FileNotFoundError:
+        print("Error: File not found. Please provide the correct file path.")
+        return
 
-# Number of data points to generate
-num_samples = 1000  # Adjust as needed
+    # Identify outliers
+    df = identify_market_value_outliers(df)
 
-# Define ranges for your independent variables (features)
-original_face_range = (10, 1000)  # Example range
-factor_value_range = (0.5, 5.0)  # Example range
-price_range = (50, 500)       # Example range
+    # Save the results to a new Excel file (replace 'output_file.xlsx' with your desired file name)
+    try:
+        df.to_excel('output_file.xlsx', index=False)
+        print("Results saved to output_file.xlsx")
+    except Exception as e:
+        print(f"Error saving to Excel: {e}")
 
-# Generate random data within the specified ranges
-original_face = np.random.uniform(original_face_range[0], original_face_range[1], num_samples)
-factor_value = np.random.uniform(factor_value_range[0], factor_value_range[1], num_samples)
-price = np.random.uniform(price_range[0], price_range[1], num_samples)
 
-# Calculate the dependent variable (target) using your formula
-market_value = (original_face * factor_value * price) / 100
-
-# Create a Pandas DataFrame
-data = pd.DataFrame({
-    'Original Face': original_face,
-    'Factor Value': factor_value,
-    'Price': price,
-    'Market Value': market_value
-})
-
-# (Optional) Add some random noise to the Market Value to simulate real-world data
-noise_level = 0.05  # 5% noise
-noise = np.random.normal(0, market_value * noise_level, num_samples) #Noise proportional to market value
-data['Market Value'] = data['Market Value'] + noise
-
-# Save to CSV (optional)
-data.to_csv('your_data.csv', index=False)
-
-# Display the first few rows of the DataFrame
-print(data.head())
-
-# Display descriptive statistics
-print(data.describe())
+if __name__ == "__main__":
+    main()
