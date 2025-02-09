@@ -81,3 +81,8 @@ print("Predicted Market Value:", predicted_market_value[0])
 
 df["comment"] = np.where(df[col_list].isnull().any(axis=1), "values are null", None)
 df["Result"] = np.where(df[col_list].isnull().any(axis=1), "excluded", None)
+
+
+threshold = np.percentile(df["percentage_diff"], 90)
+df["outlier_flag"] = df["percentage_diff"].apply(lambda x: "Outlier" if x > threshold else "Inlier")
+print(f"Using {threshold:.2f}% as the threshold for outliers.")
