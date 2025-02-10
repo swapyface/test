@@ -1,41 +1,39 @@
-from pylint import epylint
+import pandas as pd
+from sklearn.ensemble import IsolationForest
 
-def run_pylint(module_or_file):
-    """Runs Pylint and returns the report and score."""
+# Sample Data (replace with your actual data)
+data = {'AssetID': [1, 1, 1, 1, 2, 2, 2, 2],
+        'Time': [1, 2, 3, 4, 1, 2, 3, 4],
+        'OriginalFace': [100, 100, 100, 100, 200, 200, 200, 200],
+        'FactorAnatic': [1.1, 1.1, 1.1, 1.1, 1.2, 1.2, 1.2, 1.2],
+        'Price': [10, 12, 11, 20, 5, 6, 7, 8]}
 
-    pylint_opts = [module_or_file, '--disable=missing-module-docstring']  # Add other options here
+df = pd.DataFrame(data)
 
-    stdout, stderr = epylint.py_run(pylint_opts, do_exit=False)
+# Calculate Market Value (Keep this separate)
+df['MarketValue'] = df['OriginalFace'] * df['FactorAnatic'] * df['Price']
 
-    report = stdout.getvalue()
-    # Extract the score using a regular expression.
-    import re
-    match = re.search(r"Your code has been rated at (\d+\.\d+)/10", report)
-    if match:
-        score = float(match.group(1))
-    else:
-        score = None  # Handle cases where score isn't found
+# Calculate Percentage Changes (for the base features)
+for col in ['OriginalFace', 'FactorAnatic', 'Price']:
+    df[f'{col}_Change'] = df.groupby('AssetID')[col].pct_change()
+df.fillna(0, inplace=True)
 
-    return report, score
+# Train Isolation Forest (on the base feature changes)
+change_cols = [col for col in df.columns if col.endswith('_Change')]
+model = IsolationForest(contamination=0.05)
+model.fit(df[change_cols])
 
+df['Outlier'] = model.predict(df[change_cols])
 
-# Example usage:
-module_or_file_to_check = "my_module.py"  # Or your module/package name
-report, score = run_pylint(module_or_file_to_check)
+print(df)
 
-print(report)
-print(f"Pylint Score: {score}")
+outliers = df[df['Outlier'] == -1]
+print("\nOutliers:")
+print(outliers)
 
-# Example of parsing the report for errors and warnings:
-import re
-error_pattern = r"(.+?):(\d+):(\d+): E\d+: (.+)"
-warning_pattern = r"(.+?):(\d+):(\d+): W\d+: (.+)"
+# Analyze impact on Market Value for outliers
+outlier_market_values = outliers[['AssetID', 'Time', 'MarketValue']]
+print("\nOutlier Market Values:")
+print(outlier_market_values)
 
-errors = re.findall(error_pattern, report)
-warnings = re.findall(warning_pattern, report)
-
-for error in errors:
-    print(f"Error: {error}")
-
-for warning in warnings:
-    print(f"Warning: {warning}")
+# ... (Visualization and further analysis) ...
