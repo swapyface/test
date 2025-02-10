@@ -1,33 +1,41 @@
-from pylint import config, lint
+from pylint import epylint
 
 def run_pylint(module_or_file):
-    """Runs Pylint and returns the report and stats."""
+    """Runs Pylint and returns the report and score."""
 
-    args = [module_or_file]
+    pylint_opts = [module_or_file, '--disable=missing-module-docstring']  # Add other options here
 
-    # Initialize Pylint's configuration (important!)
-    config.initialize()
+    stdout, stderr = epylint.py_run(pylint_opts, do_exit=False)
 
-    # Run Pylint
-    (stdout, stderr) = lint.Run(args, do_exit=False)
-
-    # Get the report
     report = stdout.getvalue()
+    # Extract the score using a regular expression.
+    import re
+    match = re.search(r"Your code has been rated at (\d+\.\d+)/10", report)
+    if match:
+        score = float(match.group(1))
+    else:
+        score = None  # Handle cases where score isn't found
 
-    # Access statistics (this is the correct way now)
-    stats = lint.stats
-
-    return report, stats
+    return report, score
 
 
 # Example usage:
-module_or_file_to_check = "my_module.py"
-report, stats = run_pylint(module_or_file_to_check)
+module_or_file_to_check = "my_module.py"  # Or your module/package name
+report, score = run_pylint(module_or_file_to_check)
 
 print(report)
-print(stats)
+print(f"Pylint Score: {score}")
 
-# Example: Accessing specific statistics
-print(f"Global score: {stats.global_module}")  # Example statistic
+# Example of parsing the report for errors and warnings:
+import re
+error_pattern = r"(.+?):(\d+):(\d+): E\d+: (.+)"
+warning_pattern = r"(.+?):(\d+):(\d+): W\d+: (.+)"
 
-# ... (process report and stats)
+errors = re.findall(error_pattern, report)
+warnings = re.findall(warning_pattern, report)
+
+for error in errors:
+    print(f"Error: {error}")
+
+for warning in warnings:
+    print(f"Warning: {warning}")
