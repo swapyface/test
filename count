@@ -1,28 +1,33 @@
-from pylint import lint
+from pylint import config, lint
 
 def run_pylint(module_or_file):
-    """Runs Pylint on a module or file and returns the report."""
+    """Runs Pylint and returns the report and stats."""
 
-    args = [module_or_file]  # List of arguments for Pylint
-    # You can add more arguments here, like '--rcfile=.pylintrc'
+    args = [module_or_file]
 
-    pylint_opts = lint.Options()  # Get Pylint's options
+    # Initialize Pylint's configuration (important!)
+    config.initialize()
 
-    # This is the core part that runs pylint and captures the report
-    (stdout, stderr) = lint.Run(args, do_exit=False)  # do_exit=False is crucial
+    # Run Pylint
+    (stdout, stderr) = lint.Run(args, do_exit=False)
 
-    # Get the report (it's a string)
+    # Get the report
     report = stdout.getvalue()
 
-    # Or to get the stats:
-    stats = pylint_opts.stats
+    # Access statistics (this is the correct way now)
+    stats = lint.stats
 
     return report, stats
 
+
 # Example usage:
-module_or_file_to_check = "my_module.py"  # Or the name of a module
+module_or_file_to_check = "my_module.py"
 report, stats = run_pylint(module_or_file_to_check)
 
-print(report)  # Print the Pylint report
-print(stats) # Print the stats
-# Process the report as needed
+print(report)
+print(stats)
+
+# Example: Accessing specific statistics
+print(f"Global score: {stats.global_module}")  # Example statistic
+
+# ... (process report and stats)
