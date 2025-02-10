@@ -1,39 +1,41 @@
 import pandas as pd
 from sklearn.ensemble import IsolationForest
+import numpy as np
 
 # Sample Data (replace with your actual data)
-data = {'AssetID': [1, 1, 1, 1, 2, 2, 2, 2],
-        'Time': [1, 2, 3, 4, 1, 2, 3, 4],
-        'OriginalFace': [100, 100, 100, 100, 200, 200, 200, 200],
-        'FactorAnatic': [1.1, 1.1, 1.1, 1.1, 1.2, 1.2, 1.2, 1.2],
-        'Price': [10, 12, 11, 20, 5, 6, 7, 8]}
+data = {'AssetID': [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],
+        'Time': [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4],
+        'OriginalFace': [100, 110, 120, 130, 200, 220, 240, 260, 100, 90, 80, 70],
+        'FactorAnatic': [1.1, 1.1, 1.1, 1.1, 1.2, 1.2, 1.2, 1.2, 1.1, 1.1, 1.1, 1.1],
+        'Price': [10, 11, 12, 13, 5, 6, 7, 8, 10, 9, 8, 7]}
 
 df = pd.DataFrame(data)
 
-# Calculate Market Value (Keep this separate)
+# Calculate Market Value
 df['MarketValue'] = df['OriginalFace'] * df['FactorAnatic'] * df['Price']
 
-# Calculate Percentage Changes (for the base features)
+# Calculate Percentage Changes
 for col in ['OriginalFace', 'FactorAnatic', 'Price']:
     df[f'{col}_Change'] = df.groupby('AssetID')[col].pct_change()
+
 df.fillna(0, inplace=True)
 
-# Train Isolation Forest (on the base feature changes)
-change_cols = [col for col in df.columns if col.endswith('_Change')]
-model = IsolationForest(contamination=0.05)
-model.fit(df[change_cols])
+# Calculate Expected Market Value Change
+df['Expected_MV_Change'] = (1 + df['OriginalFace_Change']) * (1 + df['FactorAnatic_Change']) * (1 + df['Price_Change']) - 1
+df['Expected_MV_Change'] = df.groupby('AssetID')['Expected_MV_Change'].shift(1).fillna(0) # Shift by one to align with current time step
 
-df['Outlier'] = model.predict(df[change_cols])
+df['Actual_MV_Change'] = df.groupby('AssetID')['MarketValue'].pct_change().fillna(0)
+
+# Calculate Difference between Actual and Expected MV Change
+df['MV_Change_Diff'] = df['Actual_MV_Change'] - df['Expected_MV_Change']
+
+# Train Isolation Forest (using MV_Change_Diff)
+model = IsolationForest(contamination=0.05)
+model.fit(df[['MV_Change_Diff']])
+df['Outlier'] = model.predict(df[['MV_Change_Diff']])
 
 print(df)
 
 outliers = df[df['Outlier'] == -1]
 print("\nOutliers:")
 print(outliers)
-
-# Analyze impact on Market Value for outliers
-outlier_market_values = outliers[['AssetID', 'Time', 'MarketValue']]
-print("\nOutlier Market Values:")
-print(outlier_market_values)
-
-# ... (Visualization and further analysis) ...
