@@ -1,22 +1,69 @@
-def identify_market_value_outliers(df, tolerance=0.05):
-    """
-    Calculates Market Value, identifies outliers, and returns a DataFrame with outlier flags.
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import RobustScaler  # Or StandardScaler if no extreme outliers
+from sklearn.metrics import r2_score, mean_squared_error
 
-    Args:
-        df: Pandas DataFrame with 'Original Face', 'Factor Analytic', 'Price', and 'Market Value' columns.
-        tolerance: The percentage tolerance for outlier identification (default: 0.05 or 5%).
+# 1. Load and Preprocess Data
+data = pd.read_csv('your_data.csv')  # Replace with your file path
+X = data.drop('Market Value', axis=1)  # Features
+y = data['Market Value']  # Target
 
-    Returns:
-        Pandas DataFrame with an added 'Outlier' column (True for outlier, False for inlier).
-    """
+# 2. Split Data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Calculate Market Value
-    df['Calculated Market Value'] = (df['Original Face'] * df['Factor Analytic'] * df['Price']) / 100
+# 3. Scaling (Important for Autoencoders)
+scaler = RobustScaler()  # Or StandardScaler
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-    # Calculate percentage difference
-    df['Percentage Difference'] = abs((df['Calculated Market Value'] - df['Market Value']) / df['Market Value']) * 100
+# 4. Autoencoder Model
+input_dim = X_train_scaled.shape[1]  # Number of features
 
-    # Identify outliers
-    df['Outlier'] = df['Percentage Difference'] > (tolerance * 100)  # Convert tolerance to percentage
+# Encoder
+encoder_input = tf.keras.Input(shape=(input_dim,))
+encoded = tf.keras.layers.Dense(64, activation='relu')(encoder_input)  # Adjust layer size as needed
+encoded = tf.keras.layers.Dense(32, activation='relu')(encoded)  # Bottleneck layer (adjust size)
 
-    return df
+# Decoder
+decoded = tf.keras.layers.Dense(64, activation='relu')(encoded)
+decoded = tf.keras.layers.Dense(input_dim, activation='linear')(decoded) # Output layer (linear activation)
+
+# Autoencoder
+autoencoder = tf.keras.Model(encoder_input, decoded)
+
+# Compile Autoencoder
+autoencoder.compile(optimizer='adam', loss='mse')  # Use MSE loss for regression
+
+# Train Autoencoder
+autoencoder.fit(X_train_scaled, X_train_scaled, epochs=50, batch_size=32, verbose=1)  # Adjust epochs and batch size
+
+# 5. Extract Encoded Features
+encoder = tf.keras.Model(encoder_input, encoded) # Create encoder model
+X_train_encoded = encoder.predict(X_train_scaled)
+X_test_encoded = encoder.predict(X_test_scaled)
+
+# 6. Regression Model (using encoded features)
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(64, activation='relu', input_shape=(32,)), # Input shape is the encoded feature size
+    tf.keras.layers.Dense(32, activation='relu'),
+    tf.keras.layers.Dense(1)  # Output layer (no activation for regression)
+])
+
+model.compile(optimizer='adam', loss='mse')
+
+model.fit(X_train_encoded, y_train, epochs=50, batch_size=32, verbose=1) # Train the regression model
+
+# 7. Evaluate
+y_pred = model.predict(X_test_encoded)
+r2 = r2_score(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+
+print(f"R-squared: {r2}")
+print(f"Mean Squared Error: {mse}")
+
+
+# Optional: Fine-tuning the whole model (Autoencoder + Regressor)
+# Combine the autoencoder and regression model
+# ... (see explanation below)
