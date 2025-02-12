@@ -1,88 +1,23 @@
-# Train final model with best parameters
-xgb_tuned = XGBRegressor(objective="reg:squarederror", **best_params, random_state=42)
-xgb_tuned.fit(X_train, y_train)
-
-# Save the fine-tuned model
-joblib.dump(xgb_tuned, "fine_tuned_xgb_model.pkl")
-print("\n✅ Fine-Tuned Model Saved as 'fine_tuned_xgb_model.pkl'")
-
-# Predict using tuned model
-y_pred_tuned = xgb_tuned.predict(X_test)
-
-# Evaluate tuned model
-tuned_rmse = np.sqrt(mean_squared_error(y_test, y_pred_tuned))
-tuned_mae = mean_absolute_error(y_test, y_pred_tuned)
-tuned_r2 = r2_score(y_test, y_pred_tuned)
-
-print("\n🚀 Fine-Tuned XGBoost Model Performance:")
-print(f"RMSE: {tuned_rmse:.4f}")
-print(f"MAE: {tuned_mae:.4f}")
-print(f"R²: {tuned_r2:.4f}")
-✅ How to Load & Use the Fine-Tuned Model?
-python
-Copy
-Edit
-import joblib
-import numpy as np
-
-# Load the fine-tuned model and scaler
-model = joblib.load("fine_tuned_xgb_model.pkl")
-scaler = joblib.load("scaler.pkl")
-
-# New input data (face_value, factor, price)
-new_data = np.array([[50000, 1.2, 105]])  # Example input
-
-# Scale the new data
-new_data_scaled = scaler.transform(new_data)
-
-
-
 import pandas as pd
-import numpy as np
-import joblib
 
-# Load the fine-tuned XGBoost model and scaler
-model = joblib.load("fine_tuned_xgb_model.pkl")
-scaler = joblib.load("scaler.pkl")
+# Sample dataset
+data = pd.DataFrame({
+    'id': [101, 102, 101, 103, 102, 104, 105, 103],
+    'factor': [1.2, 1.5, 1.2, 1.8, 1.5, 2.0, 1.1, 1.8],  # Example additional parameter
+    'face_value': [100, 200, 100, 300, 200, 400, 500, 300]
+})
 
-# Load the dataset (Ensure it contains 'book_id', 'asset_id', 'given_market_value', 'face_value', 'factor', 'price')
-df = pd.read_csv("new_dataset.csv")
+# Step 1: Extract unique IDs and their corresponding parameters
+unique_ids_df = data[['id', 'factor', 'face_value']].drop_duplicates()
 
-# Extract relevant columns
-X = df[["face_value", "factor", "price"]]
-given_market_value = df["given_market_value"]
+# Step 2: Price function with additional parameters
+def get_price(id_value, factor, face_value):
+    return face_value * factor * 0.05  # Example: Price calculation
 
-# Scale features
-X_scaled = scaler.transform(X)
+# Step 3: Compute prices for unique IDs
+unique_ids_df['price'] = unique_ids_df.apply(lambda row: get_price(row['id'], row['factor'], row['face_value']), axis=1)
 
-# Predict market value using the trained model
-df["predicted_market_value"] = model.predict(X_scaled)
+# Step 4: Merge prices back to original dataset
+data = data.merge(unique_ids_df[['id', 'price']], on='id', how='left')
 
-# Calculate percentage difference
-df["percentage_diff"] = abs(df["predicted_market_value"] - given_market_value) / given_market_value * 100
-
-# Flag records as outliers or inliers based on 2% difference threshold
-df["outlier_flag"] = df["percentage_diff"].apply(lambda x: "Outlier" if x > 2 else "Inlier")
-
-# Select relevant columns for output
-result_df = df[["book_id", "asset_id", "given_market_value", "predicted_market_value", "percentage_diff", "outlier_flag"]]
-
-# Save results to a CSV file
-result_df.to_csv("market_value_outliers.csv", index=False)
-
-print("\n✅ Outlier Detection Completed. Results saved in 'market_value_outliers.csv'")
-
-
-# Predict Market Value
-predicted_market_value = model.predict(new_data_scaled)
-print("Predicted Market Value:", predicted_market_value[0])
-
-
-
-df["comment"] = np.where(df[col_list].isnull().any(axis=1), "values are null", None)
-df["Result"] = np.where(df[col_list].isnull().any(axis=1), "excluded", None)
-
-
-threshold = np.percentile(df["percentage_diff"], 90)
-df["outlier_flag"] = df["percentage_diff"].apply(lambda x: "Outlier" if x > threshold else "Inlier")
-print(f"Using {threshold:.2f}% as the threshold for outliers.")
+print(data)
