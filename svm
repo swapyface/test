@@ -3,21 +3,20 @@ import pandas as pd
 # Sample dataset
 data = pd.DataFrame({
     'id': [101, 102, 101, 103, 102, 104, 105, 103],
-    'factor': [1.2, 1.5, 1.2, 1.8, 1.5, 2.0, 1.1, 1.8],  # Example additional parameter
-    'face_value': [100, 200, 100, 300, 200, 400, 500, 300]
+    'other_col': [10, 20, 30, 40, 50, 60, 70, 80]  # Other columns
 })
 
-# Step 1: Extract unique IDs and their corresponding parameters
-unique_ids_df = data[['id', 'factor', 'face_value']].drop_duplicates()
+# Step 1: Extract unique IDs
+unique_ids = data['id'].unique()
 
-# Step 2: Price function with additional parameters
-def get_price(id_value, factor, face_value):
-    return face_value * factor * 0.05  # Example: Price calculation
+# Step 2: Define a price function
+def get_price(id_value):
+    return id_value * 2  # Example: Replace with your actual function
 
-# Step 3: Compute prices for unique IDs
-unique_ids_df['price'] = unique_ids_df.apply(lambda row: get_price(row['id'], row['factor'], row['face_value']), axis=1)
+# Step 3: Compute prices using a loop and store in a dictionary
+price_dict = {id_value: get_price(id_value) for id_value in unique_ids}
 
-# Step 4: Merge prices back to original dataset
-data = data.merge(unique_ids_df[['id', 'price']], on='id', how='left')
+# Step 4: Map prices back to the original DataFrame
+data['price'] = data['id'].map(price_dict)
 
 print(data)
