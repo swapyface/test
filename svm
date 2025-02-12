@@ -1,22 +1,29 @@
-import pandas as pd
+from sklearn.cluster import DBSCAN
 
-# Sample dataset
-data = pd.DataFrame({
-    'id': [101, 102, 101, 103, 102, 104, 105, 103],
-    'other_col': [10, 20, 30, 40, 50, 60, 70, 80]  # Other columns
-})
+def get_dbscan_params(n_samples):
+    """Dynamically adjust DBSCAN parameters based on dataset size."""
+    if n_samples > 100:
+        eps = 0.5  
+        min_samples = 10  
+    elif n_samples > 50:
+        eps = 0.4  
+        min_samples = 5  
+    elif n_samples > 20:
+        eps = 0.3  
+        min_samples = 3  
+    else:
+        eps = 0.2  
+        min_samples = 2  
+    return eps, min_samples
 
-# Step 1: Extract unique IDs
-unique_ids = data['id'].unique()
-
-# Step 2: Define a price function
-def get_price(id_value):
-    return id_value * 2  # Example: Replace with your actual function
-
-# Step 3: Compute prices using a loop and store in a dictionary
-price_dict = {id_value: get_price(id_value) for id_value in unique_ids}
-
-# Step 4: Map prices back to the original DataFrame
-data['price'] = data['id'].map(price_dict)
-
-print(data)
+def run_dbscan_by_rating(df):
+    """Apply DBSCAN to each rating separately with dynamic parameters."""
+    results = []
+    
+    for rating, group in df.groupby('rating'):
+        eps, min_samples = get_dbscan_params(len(group))
+        db = DBSCAN(eps=eps, min_samples=min_samples)
+        group['cluster'] = db.fit_predict(group[['price']])  
+        results.append(group)
+    
+    return pd.concat(results)
