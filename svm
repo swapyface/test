@@ -1,29 +1,10 @@
-from sklearn.cluster import DBSCAN
+import pandas as pd
 
-def get_dbscan_params(n_samples):
-    """Dynamically adjust DBSCAN parameters based on dataset size."""
-    if n_samples > 100:
-        eps = 0.5  
-        min_samples = 10  
-    elif n_samples > 50:
-        eps = 0.4  
-        min_samples = 5  
-    elif n_samples > 20:
-        eps = 0.3  
-        min_samples = 3  
-    else:
-        eps = 0.2  
-        min_samples = 2  
-    return eps, min_samples
+# Convert dictionary to DataFrame
+results_df = pd.DataFrame.from_dict(results_dict, orient='index', columns=['col1', 'col2', 'col3', 'col4'])
 
-def run_dbscan_by_rating(df):
-    """Apply DBSCAN to each rating separately with dynamic parameters."""
-    results = []
-    
-    for rating, group in df.groupby('rating'):
-        eps, min_samples = get_dbscan_params(len(group))
-        db = DBSCAN(eps=eps, min_samples=min_samples)
-        group['cluster'] = db.fit_predict(group[['price']])  
-        results.append(group)
-    
-    return pd.concat(results)
+# Reset index to make ID a column
+results_df.reset_index(inplace=True)
+results_df.rename(columns={'index': 'id'}, inplace=True)
+
+df = df.merge(results_df, on='id', how='left')
