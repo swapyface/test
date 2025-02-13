@@ -1,5 +1,36 @@
-import numpy as np
+import sys
+import subprocess
+import os
 
-df['years'] = np.where((df['num_of_days'] / 365) % 1 >= 0.1, 
-                       np.ceil(df['num_of_days'] / 365), 
-                       df['num_of_days'] // 365)
+def run_pylint(file_path, output_dir):
+    """Run pylint on the given Python file and save the report to the specified directory."""
+    
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Generate report file path
+    base_name = os.path.basename(file_path).replace(".py", "_pylint_report.txt")
+    report_file = os.path.join(output_dir, base_name)
+    
+    try:
+        # Run pylint and capture the output
+        result = subprocess.run(
+            ["pylint", file_path],
+            capture_output=True,
+            text=True
+        )
+        
+        # Save the report to the specified directory
+        with open(report_file, "w") as f:
+            f.write(result.stdout)
+        
+        print(f"Pylint report saved to: {report_file}")
+    
+    except Exception as e:
+        print(f"Error running pylint: {e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: python pylint_checker.py <file.py> <output_directory>")
+    else:
+        run_pylint(sys.argv[1], sys.argv[2])
