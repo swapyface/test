@@ -1,3 +1,9 @@
-chunk_price_ask, chunk_price_bid = zip(*[get_cols(Cusip_) for Cusip_ in chunk_ids])
+results = [get_cols(Cusip_) for Cusip_ in chunk_ids]
+
+# Ensure every result is a tuple of (ask, bid)
+valid_results = [(ask, bid) if isinstance(res, tuple) and len(res) == 2 else (None, None) for res in results]
+
+chunk_price_ask, chunk_price_bid = zip(*valid_results)
+
 chunk_price_ask = dict(zip(chunk_ids, chunk_price_ask))
 chunk_price_bid = dict(zip(chunk_ids, chunk_price_bid))
