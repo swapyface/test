@@ -1,11 +1,3 @@
-results = [get_cols(Cusip_) for Cusip_ in chunk_ids]
-
-# Ensure every result is a tuple (ask, bid), replacing None with (None, None)
-valid_results = [(res if isinstance(res, tuple) and len(res) == 2 else (None, None)) for res in results]
-
-# Unpack into separate lists
-chunk_price_ask, chunk_price_bid = zip(*valid_results) if valid_results else ([], [])
-
-# Convert to dictionaries
-chunk_price_ask = dict(zip(chunk_ids, chunk_price_ask))
-chunk_price_bid = dict(zip(chunk_ids, chunk_price_bid))
+null_counts = df.groupby('product')['price'].apply(lambda x: x.isnull().sum()).reset_index()
+null_counts.columns = ['product', 'null_price_count']
+print(null_counts)
