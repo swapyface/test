@@ -1,9 +1,11 @@
 results = [get_cols(Cusip_) for Cusip_ in chunk_ids]
 
-# Ensure every result is a tuple of (ask, bid)
-valid_results = [(ask, bid) if isinstance(res, tuple) and len(res) == 2 else (None, None) for res in results]
+# Ensure every result is a tuple (ask, bid), replacing None with (None, None)
+valid_results = [(res if isinstance(res, tuple) and len(res) == 2 else (None, None)) for res in results]
 
-chunk_price_ask, chunk_price_bid = zip(*valid_results)
+# Unpack into separate lists
+chunk_price_ask, chunk_price_bid = zip(*valid_results) if valid_results else ([], [])
 
+# Convert to dictionaries
 chunk_price_ask = dict(zip(chunk_ids, chunk_price_ask))
 chunk_price_bid = dict(zip(chunk_ids, chunk_price_bid))
