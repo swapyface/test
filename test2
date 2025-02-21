@@ -1,36 +1,64 @@
-import sys
-import subprocess
+!pip install pylint
+
+import pylint.lint as lint
+import io
 import os
+import sys
 
-def run_pylint(file_path, output_dir):
-    """Run pylint on the given Python file and save the report to the specified directory."""
-    
-    # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
+def run_pylint_from_file(file_path, pylint_opts="--disable=missing-module-docstring,C0114,C0115,C0116"):
+    """Runs pylint on a file and returns the report.
 
-    # Generate report file path
-    base_name = os.path.basename(file_path).replace(".py", "_pylint_report.txt")
-    report_file = os.path.join(output_dir, base_name)
-    
+    Args:
+        file_path: The path to the Python file.
+        pylint_opts: Pylint options (as a string).
+
+    Returns:
+        A tuple containing the pylint report and the return code.
+        Returns None, None if the file does not exist.
+    """
+
+    if not os.path.exists(file_path):
+        print(f"Error: File not found: {file_path}")
+        return None, None
+
+    args = [file_path]
+    args.extend(pylint_opts.split(','))
+
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    sys.stdout = io.StringIO()
+    sys.stderr = io.StringIO()
+
     try:
-        # Run pylint and capture the output
-        result = subprocess.run(
-            ["pylint", file_path],
-            capture_output=True,
-            text=True
-        )
-        
-        # Save the report to the specified directory
-        with open(report_file, "w") as f:
-            f.write(result.stdout)
-        
-        print(f"Pylint report saved to: {report_file}")
-    
-    except Exception as e:
-        print(f"Error running pylint: {e}")
+        lint.Run(args)
+        report = sys.stdout.getvalue() + sys.stderr.getvalue()
+        return_code = 0
+    except SystemExit as ex:
+        report = sys.stdout.getvalue() + sys.stderr.getvalue()
+        return_code = ex.code if ex.code is not None else 1
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
 
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python pylint_checker.py <file.py> <output_directory>")
+    return report, return_code
+
+
+
+# Example Usage (replace 'test.py' with the actual path to your file):
+file_path = 'test.py'  # Or any other path:  '/path/to/your/test.py'
+report, return_code = run_pylint_from_file(file_path)
+
+if report is not None: # Check if the file existed
+    print(report)
+
+    if return_code == 0:
+        print("Pylint found no issues.")
     else:
-        run_pylint(sys.argv[1], sys.argv[2])
+        print(f"Pylint found issues. Return code: {return_code}")
+
+    # Now you can use the 'report' variable:
+    # Example: save the report to a file
+    # with open("pylint_report.txt", "w") as f:
+    #     f.write(report)
+else:
+    print("File not found. Pylint report could not be generated.")
