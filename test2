@@ -2,24 +2,24 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
-from scipy.spatial.distance import pdist, squareform
+from sklearn.neighbors import NearestNeighbors
 
-# Load your dataset
+# Load dataset
 df = pd.read_csv("your_data.csv")  # Replace with your actual dataset
 
-# Define function to determine min_samples dynamically
+# Function to determine min_samples dynamically
 def determine_min_samples(n):
     return max(2, int(np.log(n)))  # Ensures a minimum of 2
 
-# Define function to estimate `eps` using k-distance method
+# Function to estimate `eps` using k-nearest neighbors distance
 def estimate_eps(data, k=5):
     if len(data) < k:
-        return 0.5  # Default fallback value
+        return 0.5  # Fallback value
     
-    distance_matrix = squareform(pdist(data))
-    np.fill_diagonal(distance_matrix, np.inf)
+    nbrs = NearestNeighbors(n_neighbors=k).fit(data)
+    distances, _ = nbrs.kneighbors(data)
     
-    k_distances = np.sort(distance_matrix, axis=1)[:, k - 1]
+    k_distances = np.sort(distances[:, k - 1])
     return np.percentile(k_distances, 90)  # Use the 90th percentile heuristic
 
 # Store outliers
