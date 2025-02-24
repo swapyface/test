@@ -1,11 +1,62 @@
+import numpy as np
+import pandas as pd
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import NearestNeighbors
+
+# Load dataset
+df = pd.read_csv("your_data.csv")  # Replace with your actual dataset
+
+# Function to determine min_samples dynamically
+def determine_min_samples(n):
+    return max(2, int(np.log(n)))  # Ensures a minimum of 2
+
+# Function to estimate `eps` using k-nearest neighbors distance
 def estimate_eps(data, k=5, min_eps=0.1):
-    if len(data) < k:
-        return min_eps  # Ensure a positive default value
+    n_samples = len(data)
     
-    nbrs = NearestNeighbors(n_neighbors=min(k, len(data) - 1)).fit(data)
+    if n_samples < 2:
+        return min_eps  # Skip groups with only one record
+
+    # Ensure k is valid (not greater than available records)
+    k = min(k, n_samples - 1)
+
+    nbrs = NearestNeighbors(n_neighbors=k).fit(data)
     distances, _ = nbrs.kneighbors(data)
-    
+
+    if distances.shape[1] <= 1:
+        return min_eps  # Handle cases where only one feature exists
+
     k_distances = np.sort(distances[:, k - 1])
     eps_value = np.percentile(k_distances, 90)  # Use the 90th percentile heuristic
+
+    return max(eps_value, min_eps)  # Ensure eps is always positive
+
+# Store outliers
+outlier_records = []
+
+# Process each issuer_id separately
+for issuer_id, group in df.groupby("issuer_id"):
+    data = group.drop(columns=["issuer_id"])  # Keep only numerical features
     
-    return max(eps_value, min_eps)  # Ensure eps is always posi
+    if len(data) < 2:
+        continue  # Skip groups with too few records
+
+    # Print shape for debugging
+    print(f"Issuer ID: {issuer_id}, Data Shape: {data.shape}")
+
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(data)
+
+    min_samples = determine_min_samples(len(data))
+    eps = estimate_eps(scaled_data, k=min_samples)
+
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+    labels = dbscan.fit_predict(scaled_data)
+
+    group["outlier"] = (labels == -1).astype(int)  # Mark outliers as 1
+    outlier_records.append(group)
+
+# Combine results
+final_df = pd.concat(outlier_records)
+print(final_df[final_df["outlier"] == 1])  # Show detected outliers
