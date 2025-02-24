@@ -1,84 +1,50 @@
-!pip install pylint
+import numpy as np
+import pandas as pd
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+from scipy.spatial.distance import pdist, squareform
 
-import pylint.lint as lint
-import io
-import os
-import tempfile
-import sys
+# Load your dataset
+df = pd.read_csv("your_data.csv")  # Replace with your actual dataset
 
-def run_pylint_from_code_block(code_block, pylint_opts="--disable=missing-module-docstring,C0114,C0115,C0116"):
-    """Runs pylint on a block of code (string) and returns the report.
+# Define function to determine min_samples dynamically
+def determine_min_samples(n):
+    return max(2, int(np.log(n)))  # Ensures a minimum of 2
 
-    Args:
-        code_block: The Python code block as a string.
-        pylint_opts: Pylint options (as a string).
+# Define function to estimate `eps` using k-distance method
+def estimate_eps(data, k=5):
+    if len(data) < k:
+        return 0.5  # Default fallback value
+    
+    distance_matrix = squareform(pdist(data))
+    np.fill_diagonal(distance_matrix, np.inf)
+    
+    k_distances = np.sort(distance_matrix, axis=1)[:, k - 1]
+    return np.percentile(k_distances, 90)  # Use the 90th percentile heuristic
 
-    Returns:
-        A tuple containing the pylint report and the return code.
-    """
+# Store outliers
+outlier_records = []
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-        temp_file_name = temp_file.name
-        temp_file.write(code_block)  # Write the code block to the temp file
+# Process each issuer_id separately
+for issuer_id, group in df.groupby("issuer_id"):
+    data = group.drop(columns=["issuer_id"])  # Keep only numerical features
+    
+    if len(data) < 2:
+        continue  # Skip groups with too few records
+    
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(data)
+    
+    min_samples = determine_min_samples(len(data))
+    eps = estimate_eps(scaled_data, k=min_samples)
+    
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+    labels = dbscan.fit_predict(scaled_data)
+    
+    group["outlier"] = (labels == -1).astype(int)  # Mark outliers as 1
+    
+    outlier_records.append(group)
 
-    args = [temp_file_name]
-    args.extend(pylint_opts.split(','))
-
-    old_stdout = sys.stdout
-    old_stderr = sys.stderr
-    sys.stdout = io.StringIO()
-    sys.stderr = io.StringIO()
-
-    try:
-        lint.Run(args)
-        report = sys.stdout.getvalue() + sys.stderr.getvalue()
-        return_code = 0
-    except SystemExit as ex:
-        report = sys.stdout.getvalue() + sys.stderr.getvalue()
-        return_code = ex.code if ex.code is not None else 1
-    finally:
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
-        os.remove(temp_file_name)  # Clean up
-
-    return report, return_code
-
-
-# Example Usage:
-code_block = """
-def example(a, b):
-    return a + b
-
-def another_function(x):
-    return x * 2
-
-# Example of a potential issue (unused variable):
-y = 30  # This will likely trigger a warning.
-
-"""
-
-report, return_code = run_pylint_from_code_block(code_block)
-
-print(report)
-
-if return_code == 0:
-    print("Pylint found no issues.")
-else:
-    print(f"Pylint found issues. Return code: {return_code}")
-
-
-code_block2 = """
-def my_function(a, b):
-    '''This function adds two numbers.'''
-    return a + b
-"""
-report2, return_code2 = run_pylint_from_code_block(code_block2)
-print("\n--- Example with docstrings ---\n", report2)
-
-
-code_block3 = """
-def no_docstring(a, b):
-    return a + b
-"""
-report3, return_code3 = run_pylint_from_code_block(code_block3)
-print("\n--- Example with no docstrings ---\n", report3)
+# Combine results
+final_df = pd.concat(outlier_records)
+print(final_df[final_df["outlier"] == 1])  # Show detected outliers
