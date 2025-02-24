@@ -1,50 +1,11 @@
-import numpy as np
-import pandas as pd
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors
-
-# Load dataset
-df = pd.read_csv("your_data.csv")  # Replace with your actual dataset
-
-# Function to determine min_samples dynamically
-def determine_min_samples(n):
-    return max(2, int(np.log(n)))  # Ensures a minimum of 2
-
-# Function to estimate `eps` using k-nearest neighbors distance
-def estimate_eps(data, k=5):
+def estimate_eps(data, k=5, min_eps=0.1):
     if len(data) < k:
-        return 0.5  # Fallback value
+        return min_eps  # Ensure a positive default value
     
-    nbrs = NearestNeighbors(n_neighbors=k).fit(data)
+    nbrs = NearestNeighbors(n_neighbors=min(k, len(data) - 1)).fit(data)
     distances, _ = nbrs.kneighbors(data)
     
     k_distances = np.sort(distances[:, k - 1])
-    return np.percentile(k_distances, 90)  # Use the 90th percentile heuristic
-
-# Store outliers
-outlier_records = []
-
-# Process each issuer_id separately
-for issuer_id, group in df.groupby("issuer_id"):
-    data = group.drop(columns=["issuer_id"])  # Keep only numerical features
+    eps_value = np.percentile(k_distances, 90)  # Use the 90th percentile heuristic
     
-    if len(data) < 2:
-        continue  # Skip groups with too few records
-    
-    scaler = StandardScaler()
-    scaled_data = scaler.fit_transform(data)
-    
-    min_samples = determine_min_samples(len(data))
-    eps = estimate_eps(scaled_data, k=min_samples)
-    
-    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-    labels = dbscan.fit_predict(scaled_data)
-    
-    group["outlier"] = (labels == -1).astype(int)  # Mark outliers as 1
-    
-    outlier_records.append(group)
-
-# Combine results
-final_df = pd.concat(outlier_records)
-print(final_df[final_df["outlier"] == 1])  # Show detected outliers
+    return max(eps_value, min_eps)  # Ensure eps is always posi
