@@ -1,3 +1,82 @@
-null_counts = df.groupby('product')['price'].apply(lambda x: x.isnull().sum()).reset_index()
-null_counts.columns = ['product', 'null_price_count']
-print(null_counts)
+Since you have ground truth labels, you can fine-tune your Isolation Forest model to improve recall using the following approach:
+
+1. Adjust Contamination Parameter
+	•	The contamination parameter controls the proportion of outliers in the dataset. If it’s too low, you might miss outliers, reducing recall.
+	•	Try different values (contamination='auto', or manually tune it between 0.01 to 0.1 based on your dataset).
+
+from sklearn.ensemble import IsolationForest
+from sklearn.metrics import recall_score
+
+# Define a range of contamination values
+contamination_values = [0.01, 0.02, 0.05, 0.1]
+
+best_recall = 0
+best_model = None
+best_contamination = None
+
+for c in contamination_values:
+    iso_forest = IsolationForest(n_estimators=100, contamination=c, random_state=42)
+    iso_forest.fit(X_train)
+
+    y_pred = iso_forest.predict(X_test)
+    y_pred = [1 if p == -1 else 0 for p in y_pred]  # Convert -1 to outlier (1), 1 to normal (0)
+
+    recall = recall_score(y_test, y_pred)
+    print(f"Contamination: {c}, Recall: {recall}")
+
+    if recall > best_recall:
+        best_recall = recall
+        best_model = iso_forest
+        best_contamination = c
+
+print(f"Best Contamination: {best_contamination}, Best Recall: {best_recall}")
+
+2. Increase the Number of Estimators
+	•	n_estimators: More trees might improve the robustness of anomaly detection. Try increasing it to 200-500.
+
+iso_forest = IsolationForest(n_estimators=300, contamination=best_contamination, random_state=42)
+iso_forest.fit(X_train)
+
+3. Tune max_samples and max_features
+	•	max_samples: Controls how many samples each tree is trained on.
+	•	Lower values (e.g., max_samples=0.5*len(X)) can generalize better.
+	•	max_features: Select fewer features per tree (e.g., max_features=0.8).
+
+iso_forest = IsolationForest(n_estimators=300, contamination=best_contamination, 
+                             max_samples=0.6, max_features=0.8, random_state=42)
+iso_forest.fit(X_train)
+
+4. Try Using Decision Scores Instead of Fixed Thresholds
+	•	Instead of using .predict(), get decision_function() scores and set a dynamic threshold.
+
+scores = iso_forest.decision_function(X_test)
+threshold = np.percentile(scores, 5)  # Adjust percentile based on desired recall
+
+y_pred = [1 if s < threshold else 0 for s in scores]
+recall = recall_score(y_test, y_pred)
+print(f"Recall after threshold tuning: {recall}")
+
+5. Use Grid Search for Hyperparameter Tuning
+
+If you want an automated way to find the best parameters:
+
+from sklearn.model_selection import GridSearchCV
+
+param_grid = {
+    'n_estimators': [100, 200, 300],
+    'max_samples': [0.5, 0.7, 1.0],
+    'max_features': [0.6, 0.8, 1.0],
+    'contamination': [0.01, 0.05, 0.1]
+}
+
+grid_search = GridSearchCV(IsolationForest(random_state=42), param_grid, cv=3, scoring='recall')
+grid_search.fit(X_train, y_train)
+
+print("Best parameters:", grid_search.best_params_)
+
+6. Consider Feature Engineering
+	•	Normalize numerical features (use StandardScaler or MinMaxScaler).
+	•	Use feature selection to remove noisy features.
+	•	Create interaction terms between important features.
+
+Would you like help with feature selection or engineering?
