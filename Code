@@ -80,3 +80,17 @@ print("Best parameters:", grid_search.best_params_)
 	•	Create interaction terms between important features.
 
 Would you like help with feature selection or engineering?
+
+
+
+from sklearn.ensemble import IsolationForest
+from sklearn.metrics import precision_recall_curve
+import numpy as np
+
+# Train Isolation Forest without specifying contamination
+iso_forest = IsolationForest(n_estimators=300, max_samples=0.6, max_features=0.8, random_state=42)
+iso_forest.fit(X_train)
+
+# Get anomaly scores (lower scores indicate more anomalous samples)
+scores = iso_forest.decision_function(X_test)
+
