@@ -1,41 +1,15 @@
-import pandas as pd
-from sklearn.ensemble import IsolationForest
-import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Sample Data (replace with your actual data)
-data = {'AssetID': [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],
-        'Time': [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4],
-        'OriginalFace': [100, 110, 120, 130, 200, 220, 240, 260, 100, 90, 80, 70],
-        'FactorAnatic': [1.1, 1.1, 1.1, 1.1, 1.2, 1.2, 1.2, 1.2, 1.1, 1.1, 1.1, 1.1],
-        'Price': [10, 11, 12, 13, 5, 6, 7, 8, 10, 9, 8, 7]}
+# Sample DataFrame structure
+# df['break_even_spread'] - Your target variable
+# df['outlier'] - 0 for inliers, 1 for outliers
 
-df = pd.DataFrame(data)
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=df, x=df.index, y="break_even_spread", hue="outlier", palette={0: "blue", 1: "red"}, alpha=0.7)
 
-# Calculate Market Value
-df['MarketValue'] = df['OriginalFace'] * df['FactorAnatic'] * df['Price']
-
-# Calculate Percentage Changes
-for col in ['OriginalFace', 'FactorAnatic', 'Price']:
-    df[f'{col}_Change'] = df.groupby('AssetID')[col].pct_change()
-
-df.fillna(0, inplace=True)
-
-# Calculate Expected Market Value Change
-df['Expected_MV_Change'] = (1 + df['OriginalFace_Change']) * (1 + df['FactorAnatic_Change']) * (1 + df['Price_Change']) - 1
-df['Expected_MV_Change'] = df.groupby('AssetID')['Expected_MV_Change'].shift(1).fillna(0) # Shift by one to align with current time step
-
-df['Actual_MV_Change'] = df.groupby('AssetID')['MarketValue'].pct_change().fillna(0)
-
-# Calculate Difference between Actual and Expected MV Change
-df['MV_Change_Diff'] = df['Actual_MV_Change'] - df['Expected_MV_Change']
-
-# Train Isolation Forest (using MV_Change_Diff)
-model = IsolationForest(contamination=0.05)
-model.fit(df[['MV_Change_Diff']])
-df['Outlier'] = model.predict(df[['MV_Change_Diff']])
-
-print(df)
-
-outliers = df[df['Outlier'] == -1]
-print("\nOutliers:")
-print(outliers)
+plt.xlabel("Index")
+plt.ylabel("Break-Even Spread")
+plt.title("Scatter Plot of Break-Even Spread (Inliers vs. Outliers)")
+plt.legend(title="Outlier", labels=["Inlier", "Outlier"])
+plt.show()
