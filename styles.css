@@ -1,123 +1,33 @@
-/* General Styles */
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.metrics import precision_recall_curve
 
-.container {
-    width: 80%;
-    margin: 0 auto;
-}
+# Load your dataset (assuming it's a Pandas DataFrame with features and ground truth labels)
+# Replace 'df' with your actual dataset
+X = df.drop(columns=['label'])  # Features
+y_true = df['label']  # Ground truth (1 = outlier, 0 = normal)
 
-a {
-    text-decoration: none;
-    color: inherit;
-    color: indianred;
-}
+# Train Isolation Forest without a fixed contamination level
+iso_forest = IsolationForest(n_estimators=300, max_samples=0.6, max_features=0.8, random_state=42)
+iso_forest.fit(X)
 
-header {
-    background: #003366;
-    color: white;
-    padding: 1em 0;
-}
+# Get anomaly scores (lower scores mean higher anomaly likelihood)
+scores = iso_forest.decision_function(X)
 
-nav {
-    display: flex;
+# Compute Precision-Recall Curve
+precision, recall, thresholds = precision_recall_curve(y_true, -scores)  # Invert scores for correct PR curve
 
-    align-items: center;
-}
+# Define target recall (adjust as needed)
+target_recall = 0.9  
 
-.logo {
-    font-size: 1.5em;
-    font-weight: bold;
-}
+# Find the best threshold that achieves at least the target recall
+best_threshold = thresholds[np.argmax(recall >= target_recall)]
 
-.nav-links {
-    list-style: none;
-    display: flex;
-}
+# Predict outliers using the selected threshold
+y_pred = np.where(scores < best_threshold, 1, 0)  # 1 = outlier, 0 = normal
 
-.nav-links li {
-    margin: 0 15px;
-}
-
-.nav-links a {
-    color: white;
-    font-size: 1em;
-}
-
-/* Hero Section */
-.hero {
-    background: url('hero-bg.jpg') no-repeat center center/cover;
-    color: white;
-    padding: 4em 0;
-    text-align: center;
-}
-
-.hero-content {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.cta-button {
-    background: #007BFF;
-    color: white;
-    padding: 0.75em 1.5em;
-    border-radius: 5px;
-}
-
-/* Sections */
-section {
-    padding: 3em 0;
-}
-
-h2 {
-    font-size: 2em;
-    margin-bottom: 0.5em;
-}
-
-.service, .industry, .insight {
-    margin-bottom: 1.5em;
-}
-
-form {
-    display: flex;
-    flex-direction: column;
-}
-
-label {
-    margin-top: 0.5em;
-}
-
-input, textarea {
-    margin-bottom: 1em;
-    padding: 0.5em;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-}
-
-/* Footer */
-footer {
-    background: #003366;
-    color: white;
-    padding: 1em 0;
-    text-align: center;
-}
-
-.social-media {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.social-media li {
-    display: inline;
-    margin: 0 10px;
-}
-
-.social-media a {
-    color: white;
-    text-decoration: none;
-}
+# Calculate final recall to confirm
+final_recall = np.sum((y_pred == 1) & (y_true == 1)) / np.sum(y_true == 1)
+print(f"Selected Threshold: {best_threshold}")
+print(f"Final Recall: {final_recall}")
