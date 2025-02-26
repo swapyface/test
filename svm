@@ -1,17 +1,133 @@
-Data structures are ways to organize and store data in a computer so that it can be used efficiently. Here's a list of some common data structures:
-Linear Data Structures:
- * Arrays: A collection of elements of the same data type, stored in contiguous memory locations.
- * Linked Lists: A sequence of nodes, where each node contains data and a pointer to the next node.
- * Stacks: A LIFO (Last-In, First-Out) data structure, where elements are added and removed from the top.
- * Queues: A FIFO (First-In, First-Out) data structure, where elements are added at the rear and removed from the front.
-Non-Linear Data Structures:
- * Trees: A hierarchical structure of nodes connected by edges, with a root node and child nodes.
-   * Binary Trees: Each node has at most two children.
-   * Binary Search Trees: Ordered binary trees for efficient searching.
-   * Heaps: Trees that satisfy a heap property (e.g., min-heap or max-heap).
- * Graphs: A collection of vertices (nodes) and edges connecting them.
- * Hash Tables: Data structures that use a hash function to map keys to values for efficient lookup.
-Other Data Structures:
- * Sets: Collections of unique elements.
- * Maps (Dictionaries): Key-value pairs, where each key is unique.
-This is not an exhaustive list, but it covers many of the most commonly used data structures. Each data structure has its own strengths and weaknesses, and the choice of which one to use depends on the specific requirements of the problem.
+class Node:
+    """A node in a linked list."""
+
+    def __init__(self, data):
+        self.data = data
+        self.next = None
+
+
+class LinkedList:
+    """A singly linked list."""
+
+    def __init__(self):
+        self.head = None
+
+    def is_empty(self):
+        return self.head is None
+
+    def append(self, data):
+        """Adds a new node with the given data to the end of the list."""
+        new_node = Node(data)
+        if self.is_empty():
+            self.head = new_node
+            return
+
+        current = self.head
+        while current.next:
+            current = current.next
+        current.next = new_node
+
+    def prepend(self, data):
+        """Adds a new node with the given data to the beginning of the list."""
+        new_node = Node(data)
+        new_node.next = self.head
+        self.head = new_node
+
+    def insert(self, data, index):
+        """Inserts a new node with the given data at the specified index."""
+        if index < 0:
+            raise ValueError("Index must be non-negative.")
+
+        if index == 0:
+            self.prepend(data)
+            return
+
+        new_node = Node(data)
+        current = self.head
+        previous = None
+        count = 0
+
+        while current and count < index:
+            previous = current
+            current = current.next
+            count += 1
+
+        if count != index:
+            raise IndexError("Index out of range.")
+
+        previous.next = new_node
+        new_node.next = current
+
+    def delete(self, data):
+        """Deletes the first node with the given data from the list."""
+        current = self.head
+        previous = None
+
+        while current:
+            if current.data == data:
+                if previous:
+                    previous.next = current.next
+                else:
+                    self.head = current.next
+                return  # Deleted the first matching node
+            previous = current
+            current = current.next
+
+    def delete_at_index(self, index):
+        """Deletes the node at the specified index."""
+        if index < 0:
+            raise ValueError("Index must be non-negative.")
+
+        if index == 0:
+            if self.head:
+                self.head = self.head.next
+            return
+
+        current = self.head
+        previous = None
+        count = 0
+
+        while current and count < index:
+            previous = current
+            current = current.next
+            count += 1
+
+        if not current:
+            raise IndexError("Index out of range.")
+
+        previous.next = current.next
+
+    def display(self):
+        """Prints the data in the linked list."""
+        current = self.head
+        elements = []
+        while current:
+            elements.append(str(current.data))
+            current = current.next
+        print(" -> ".join(elements))
+
+# Example Usage:
+my_list = LinkedList()
+my_list.append(1)
+my_list.append(2)
+my_list.append(3)
+my_list.display()  # Output: 1 -> 2 -> 3
+
+my_list.prepend(0)
+my_list.display()  # Output: 0 -> 1 -> 2 -> 3
+
+my_list.insert(10, 2)
+my_list.display()  # Output: 0 -> 1 -> 10 -> 2 -> 3
+
+my_list.delete(2)
+my_list.display() # Output: 0 -> 1 -> 10 -> 3
+
+my_list.delete_at_index(1)
+my_list.display() # Output: 0 -> 10 -> 3
+
+Key improvements in this code:
+ * Clarity: More descriptive variable names and comments enhance readability.
+ * Error Handling: ValueError and IndexError exceptions are raised for invalid input.
+ * delete_at_index: Added functionality to delete a node at a particular index.
+ * is_empty function: added a function to check if the linked list is empty.
+ * Comprehensive Example: The example usage demonstrates various operations.
