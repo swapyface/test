@@ -1,10 +1,82 @@
+You can follow these steps to build your logistic regression model for outlier detection:
+
+1. Import Required Libraries
+
 import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score
 
-# Convert dictionary to DataFrame
-results_df = pd.DataFrame.from_dict(results_dict, orient='index', columns=['col1', 'col2', 'col3', 'col4'])
+2. Load Your Dataset
 
-# Reset index to make ID a column
-results_df.reset_index(inplace=True)
-results_df.rename(columns={'index': 'id'}, inplace=True)
+# Assuming your dataset is stored in a CSV file
+df = pd.read_csv("your_dataset.csv")
 
-df = df.merge(results_df, on='id', how='left')
+# Define features (X) and target variable (y)
+X = df.drop(columns=["y"])  # Exclude the target column
+y = df["y"]  # Target variable: 'inlier' and 'outlier'
+
+3. Identify Categorical and Numerical Features
+
+categorical_features = X.select_dtypes(include=["object", "category"]).columns
+numerical_features = X.select_dtypes(include=["int64", "float64"]).columns
+
+4. Data Preprocessing Pipeline
+
+# One-hot encoding for categorical features and standard scaling for numerical features
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", StandardScaler(), numerical_features),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features),
+    ]
+)
+
+5. Train-Test Split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+6. Build Logistic Regression Model
+
+# Create a pipeline with preprocessing and logistic regression
+model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("classifier", LogisticRegression(solver="liblinear", class_weight="balanced"))
+])
+
+# Train the model
+model.fit(X_train, y_train)
+
+7. Make Predictions
+
+y_pred = model.predict(X_test)
+y_prob = model.predict_proba(X_test)[:, 1]  # Probability scores for positive class
+
+8. Evaluate Model Performance
+
+# Classification metrics
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred, pos_label="outlier")
+recall = recall_score(y_test, y_pred, pos_label="outlier")
+f1 = f1_score(y_test, y_pred, pos_label="outlier")
+
+print("Model Performance Metrics:")
+print(f"Accuracy: {accuracy:.4f}")
+print(f"Precision: {precision:.4f}")
+print(f"Recall: {recall:.4f}")
+print(f"F1-score: {f1:.4f}")
+
+# Detailed classification report
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+9. Interpret the Results
+	•	Accuracy: Measures overall correctness.
+	•	Precision: How many predicted outliers were actually outliers.
+	•	Recall: How many actual outliers were correctly identified.
+	•	F1-score: A balance between precision and recall.
+
+Would you like to add any feature selection techniques or hyperparameter tuning?
