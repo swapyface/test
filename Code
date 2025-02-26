@@ -1,96 +1,63 @@
-Since you have ground truth labels, you can fine-tune your Isolation Forest model to improve recall using the following approach:
+To fine-tune the logistic regression model, we can use GridSearchCV to optimize hyperparameters such as:
+	•	C (Inverse of regularization strength)
+	•	solver (Optimization algorithm)
+	•	class_weight (Handling imbalanced classes)
 
-1. Adjust Contamination Parameter
-	•	The contamination parameter controls the proportion of outliers in the dataset. If it’s too low, you might miss outliers, reducing recall.
-	•	Try different values (contamination='auto', or manually tune it between 0.01 to 0.1 based on your dataset).
-
-from sklearn.ensemble import IsolationForest
-from sklearn.metrics import recall_score
-
-# Define a range of contamination values
-contamination_values = [0.01, 0.02, 0.05, 0.1]
-
-best_recall = 0
-best_model = None
-best_contamination = None
-
-for c in contamination_values:
-    iso_forest = IsolationForest(n_estimators=100, contamination=c, random_state=42)
-    iso_forest.fit(X_train)
-
-    y_pred = iso_forest.predict(X_test)
-    y_pred = [1 if p == -1 else 0 for p in y_pred]  # Convert -1 to outlier (1), 1 to normal (0)
-
-    recall = recall_score(y_test, y_pred)
-    print(f"Contamination: {c}, Recall: {recall}")
-
-    if recall > best_recall:
-        best_recall = recall
-        best_model = iso_forest
-        best_contamination = c
-
-print(f"Best Contamination: {best_contamination}, Best Recall: {best_recall}")
-
-2. Increase the Number of Estimators
-	•	n_estimators: More trees might improve the robustness of anomaly detection. Try increasing it to 200-500.
-
-iso_forest = IsolationForest(n_estimators=300, contamination=best_contamination, random_state=42)
-iso_forest.fit(X_train)
-
-3. Tune max_samples and max_features
-	•	max_samples: Controls how many samples each tree is trained on.
-	•	Lower values (e.g., max_samples=0.5*len(X)) can generalize better.
-	•	max_features: Select fewer features per tree (e.g., max_features=0.8).
-
-iso_forest = IsolationForest(n_estimators=300, contamination=best_contamination, 
-                             max_samples=0.6, max_features=0.8, random_state=42)
-iso_forest.fit(X_train)
-
-4. Try Using Decision Scores Instead of Fixed Thresholds
-	•	Instead of using .predict(), get decision_function() scores and set a dynamic threshold.
-
-scores = iso_forest.decision_function(X_test)
-threshold = np.percentile(scores, 5)  # Adjust percentile based on desired recall
-
-y_pred = [1 if s < threshold else 0 for s in scores]
-recall = recall_score(y_test, y_pred)
-print(f"Recall after threshold tuning: {recall}")
-
-5. Use Grid Search for Hyperparameter Tuning
-
-If you want an automated way to find the best parameters:
+1. Import Required Libraries
 
 from sklearn.model_selection import GridSearchCV
 
+2. Define Hyperparameter Grid
+
 param_grid = {
-    'n_estimators': [100, 200, 300],
-    'max_samples': [0.5, 0.7, 1.0],
-    'max_features': [0.6, 0.8, 1.0],
-    'contamination': [0.01, 0.05, 0.1]
+    "classifier__C": [0.001, 0.01, 0.1, 1, 10, 100],  # Regularization strength
+    "classifier__solver": ["liblinear", "lbfgs"],  # Optimization algorithms
+    "classifier__class_weight": [None, "balanced"]  # Handling class imbalance
 }
 
-grid_search = GridSearchCV(IsolationForest(random_state=42), param_grid, cv=3, scoring='recall')
+3. Perform Grid Search
+
+# Define the pipeline with preprocessing and logistic regression
+model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("classifier", LogisticRegression(max_iter=1000))
+])
+
+# Use GridSearchCV to find the best parameters
+grid_search = GridSearchCV(model, param_grid, cv=5, scoring="f1", n_jobs=-1)
 grid_search.fit(X_train, y_train)
 
-print("Best parameters:", grid_search.best_params_)
+# Best parameters and best score
+print("Best Hyperparameters:", grid_search.best_params_)
+print("Best F1-score:", grid_search.best_score_)
 
-6. Consider Feature Engineering
-	•	Normalize numerical features (use StandardScaler or MinMaxScaler).
-	•	Use feature selection to remove noisy features.
-	•	Create interaction terms between important features.
+4. Evaluate the Best Model
 
-Would you like help with feature selection or engineering?
+# Get the best model from GridSearch
+best_model = grid_search.best_estimator_
 
+# Make predictions
+y_pred = best_model.predict(X_test)
 
+# Evaluate performance
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred, pos_label="outlier")
+recall = recall_score(y_test, y_pred, pos_label="outlier")
+f1 = f1_score(y_test, y_pred, pos_label="outlier")
 
-from sklearn.ensemble import IsolationForest
-from sklearn.metrics import precision_recall_curve
-import numpy as np
+print("\nFine-Tuned Model Performance:")
+print(f"Accuracy: {accuracy:.4f}")
+print(f"Precision: {precision:.4f}")
+print(f"Recall: {recall:.4f}")
+print(f"F1-score: {f1:.4f}")
 
-# Train Isolation Forest without specifying contamination
-iso_forest = IsolationForest(n_estimators=300, max_samples=0.6, max_features=0.8, random_state=42)
-iso_forest.fit(X_train)
+# Detailed classification report
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
 
-# Get anomaly scores (lower scores indicate more anomalous samples)
-scores = iso_forest.decision_function(X_test)
+Next Steps
+	•	If the dataset is highly imbalanced, you may try SMOTE or undersampling.
+	•	If F1-score is still low, try Polynomial Features or Feature Selection.
+	•	If the dataset is large, SGDClassifier (Stochastic Gradient Descent) might work better.
 
+Let me know if you want to explore further!
