@@ -1,1 +1,20 @@
+def precision(tp, fp):
+    """Calculate Precision"""
+    return tp / (tp + fp) if (tp + fp) > 0 else 0
+
+def recall(tp, fn):
+    """Calculate Recall"""
+    return tp / (tp + fn) if (tp + fn) > 0 else 0
+
+# Example values
+TP = 50  # True Positives
+FP = 10  # False Positives
+FN = 5   # False Negatives
+
+# Compute Precision and Recall
+precision_score = precision(TP, FP)
+recall_score = recall(TP, FN)
+
+print(f"Precision: {precision_score:.2f}")
+print(f"Recall: {recall_score:.2f}")
 
