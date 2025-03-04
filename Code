@@ -1,0 +1,16 @@
+import pandas as pd
+from datetime import datetime
+
+# Sample dictionary
+data_dict = {"key1": ["value1", "value2", "value3", (2025, 4, 3)]}
+
+# Convert the tuple to a date format (YYYY-MM-DD)
+data_dict["key1"][-1] = datetime(*data_dict["key1"][-1]).strftime("%Y-%m-%d")
+
+# Sample DataFrame
+df = pd.DataFrame({"key_column": ["key1", "key2"]})
+
+# Map the dictionary values to the key_column
+df["mapped_values"] = df["key_column"].map(data_dict)
+
+print(df)
