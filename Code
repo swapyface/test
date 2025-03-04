@@ -1,16 +1,36 @@
 import pandas as pd
 from datetime import datetime
 
-# Sample dictionary
-data_dict = {"key1": ["value1", "value2", "value3", (2025, 4, 3)]}
+# Sample dictionary with multiple keys
+data_dict = {
+    "key1": ["value1", "value2", "value3", (2025, 4, 3)],
+    "key2": ["data1", "data2", "data3", (2026, 5, 10)],
+    "key3": ["info1", "info2", "info3", (2027, 6, 15)]
+}
 
-# Convert the tuple to a date format (YYYY-MM-DD)
-data_dict["key1"][-1] = datetime(*data_dict["key1"][-1]).strftime("%Y-%m-%d")
+# Convert the date tuple in each dictionary value to a formatted date
+for key in data_dict:
+    data_dict[key][-1] = datetime(*data_dict[key][-1]).strftime("%Y-%m-%d")
 
-# Sample DataFrame
-df = pd.DataFrame({"key_column": ["key1", "key2"]})
+# Sample DataFrame with four columns
+df = pd.DataFrame({
+    "key_column": ["key1", "key2", "key3", "key4"],
+    "col1": ["old1", "old2", "old3", "old4"],
+    "col2": ["old5", "old6", "old7", "old8"],
+    "col3": ["old9", "old10", "old11", "old12"]
+})
 
-# Map the dictionary values to the key_column
-df["mapped_values"] = df["key_column"].map(data_dict)
+# Convert dictionary values into a DataFrame
+update_df = pd.DataFrame.from_dict(data_dict, orient="index", columns=["col1", "col2", "col3", "col4"])
+
+# Merge the original DataFrame with the dictionary DataFrame using 'key_column'
+df = df.merge(update_df, left_on="key_column", right_index=True, how="left")
+
+# Update columns only where new values exist, keeping old values if no match
+for col in ["col1", "col2", "col3"]:
+    df[col] = df[col + "_y"].fillna(df[col])
+    
+# Drop unnecessary columns generated from the merge
+df.drop(columns=["col1_y", "col2_y", "col3_y", "col4"], inplace=True)
 
 print(df)
