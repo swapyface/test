@@ -1,18 +1,26 @@
 import pandas as pd
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 
-# Sample Data
-data = {'id': [1, 1, 1, 2, 2, 2],
-        'price': [100, 1000, 5000, 50, 500, 10000]}
-
+# Sample DataFrame
+data = {
+    'project_id': [1, 1, 1, 2, 2, 2],
+    'product_id': ['A', 'A', 'A', 'B', 'B', 'B'],
+    'date': ['2025-03-04', '2025-03-05', '2025-03-06', '2025-03-04', '2025-03-05', '2025-03-06'],
+    'price': [100, 150, 150, 200, 200, 250]
+}
 df = pd.DataFrame(data)
 
-# Scale price within each id
-scaler = MinMaxScaler()
-df['scaled_price'] = df.groupby('id')['price'].transform(lambda x: scaler.fit_transform(x.values.reshape(-1, 1)).flatten())
+# Convert date column to datetime
+df['date'] = pd.to_datetime(df['date'])
+
+# Sort by project_id, product_id, and date
+df = df.sort_values(by=['project_id', 'product_id', 'date'])
 
 # Calculate percentage change
-df['pct_change'] = df.groupby('id')['scaled_price'].pct_change() * 100
+df['price_change_pct'] = df.groupby(['project_id', 'product_id'])['price'].pct_change() * 100
+
+# Replace 0% changes with group mean
+group_mean = df.groupby(['project_id', 'product_id'])['price_change_pct'].transform(lambda x: x.replace(0, x[x != 0].mean()))
+
+df['price_change_pct'] = df['price_change_pct'].mask(df['price_change_pct'] == 0, group_mean)
 
 print(df)
