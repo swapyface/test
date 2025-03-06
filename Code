@@ -1,26 +1,72 @@
 import pandas as pd
 
-# Sample DataFrame
+def find_outliers_iqr(df, column_name):
+    """
+    Identifies outliers in a specified column of a Pandas DataFrame using the IQR method.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the bond data.
+        column_name (str): The name of the column to check for outliers.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the rows with outlier values.
+    """
+
+    Q1 = df[column_name].quantile(0.25)
+    Q3 = df[column_name].quantile(0.75)
+    IQR = Q3 - Q1
+
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+
+    outliers = df[(df[column_name] < lower_bound) | (df[column_name] > upper_bound)]
+    return outliers
+
+# Example Usage:
 data = {
-    'project_id': [1, 1, 1, 2, 2, 2],
-    'product_id': ['A', 'A', 'A', 'B', 'B', 'B'],
-    'date': ['2025-03-04', '2025-03-05', '2025-03-06', '2025-03-04', '2025-03-05', '2025-03-06'],
-    'price': [100, 150, 150, 200, 200, 250]
+    'bond_id': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    'book_id': ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'E', 'F'],
+    'original_face_value': [1000, 1200, 900, 1100, 1500, 1000, 10000, 950, 1050, 1150],
+    'factor': [0.98, 0.97, 0.99, 0.96, 0.95, 1.0, 0.90, 0.98, 0.97, 0.99],
+    'price': [980, 1164, 891, 1056, 1425, 1000, 9000, 931, 1018.5, 1138.5],
+    'market_value': [980, 1164, 891, 1056, 1425, 1000, 9000, 931, 1018.5, 1138.5]
 }
+
 df = pd.DataFrame(data)
 
-# Convert date column to datetime
-df['date'] = pd.to_datetime(df['date'])
+# Find outliers in 'original_face_value'
+outliers_face_value = find_outliers_iqr(df, 'original_face_value')
+print("Outliers in original_face_value:\n", outliers_face_value)
 
-# Sort by project_id, product_id, and date
-df = df.sort_values(by=['project_id', 'product_id', 'date'])
+# Find outliers in 'price'
+outliers_price = find_outliers_iqr(df, 'price')
+print("\nOutliers in price:\n", outliers_price)
 
-# Calculate percentage change
-df['price_change_pct'] = df.groupby(['project_id', 'product_id'])['price'].pct_change() * 100
+# Find outliers in 'market_value'
+outliers_market_value = find_outliers_iqr(df, 'market_value')
+print("\nOutliers in Market Value:\n", outliers_market_value)
 
-# Replace 0% changes with group mean
-group_mean = df.groupby(['project_id', 'product_id'])['price_change_pct'].transform(lambda x: x.replace(0, x[x != 0].mean()))
+# Find outliers in 'factor'
+outliers_factor = find_outliers_iqr(df, 'factor')
+print("\nOutliers in factor:\n", outliers_factor)
 
-df['price_change_pct'] = df['price_change_pct'].mask(df['price_change_pct'] == 0, group_mean)
-
-print(df)
+Explanation:
+ * find_outliers_iqr(df, column_name) Function:
+   * Takes a Pandas DataFrame (df) and the column name (column_name) to check for outliers.
+   * Calculates the first quartile (Q1), third quartile (Q3), and interquartile range (IQR).
+   * Determines the lower and upper bounds for outlier detection.
+   * Filters the DataFrame to select rows where the specified column's values are outside the bounds.
+   * Returns a DataFrame containing the outlier rows.
+ * Example Usage:
+   * Creates a sample DataFrame (df) with bond data.
+   * Calls the find_outliers_iqr() function for the 'original_face_value', 'price', 'market_value' and 'factor' columns, and prints the resulting outlier DataFrames.
+ * How to Use in Your Scenario:
+   * Replace the sample data with your actual bond data.
+   * Modify the column names in the find_outliers_iqr() calls to match the columns you want to analyze.
+   * You can also add a loop to iterate through all the numerical columns to find the outliers.
+ * Important Notes:
+   * The IQR method is robust to non-normal distributions.
+   * The 1.5 multiplier in the IQR method is a common choice, but you can adjust it if needed.
+   * Consider the context of your data. A value identified as an outlier might be a valid and important data point.
+   * It is very easy to add a visual component to this code. You can use the visualization code from the previous response to look at the distribution of the data.
+This revised code provides a clear and efficient way to identify outliers in your bond data using the IQR method.
