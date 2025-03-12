@@ -1,0 +1,17 @@
+import hdbscan
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_blobs
+
+# Generate sample data
+X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.7, random_state=42)
+
+# Fit HDBSCAN
+clusterer = hdbscan.HDBSCAN(min_cluster_size=10, min_samples=5)
+labels = clusterer.fit_predict(X)
+
+# Plot results
+plt.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10)
+plt.colorbar(label="Cluster Label")
+plt.title("HDBSCAN Clustering")
+plt.show()
