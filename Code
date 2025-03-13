@@ -1,17 +1,32 @@
-import hdbscan
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.datasets import make_blobs
+import seaborn as sns
 
-# Generate sample data
-X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.7, random_state=42)
+# Sample DataFrame
+np.random.seed(42)
+df = pd.DataFrame({
+    'x': np.random.uniform(0, 10, 100),
+    'y': np.random.uniform(0, 10, 100)
+})
 
-# Fit HDBSCAN
-clusterer = hdbscan.HDBSCAN(min_cluster_size=10, min_samples=5)
-labels = clusterer.fit_predict(X)
+# Set eps value for DBSCAN
+eps = 1.5  # Change this value to see different results
 
-# Plot results
-plt.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=10)
-plt.colorbar(label="Cluster Label")
-plt.title("HDBSCAN Clustering")
+# Scatter plot
+plt.figure(figsize=(8, 6))
+sns.scatterplot(x=df['x'], y=df['y'], color='blue', alpha=0.6)
+
+# Draw circles at each point to represent the eps radius
+for i in range(len(df)):
+    circle = plt.Circle((df.loc[i, 'x'], df.loc[i, 'y']), eps, color='red', fill=False, alpha=0.3)
+    plt.gca().add_patch(circle)
+
+# Labels and title
+plt.xlabel("X-axis")
+plt.ylabel("Y-axis")
+plt.title(f"Scatter Plot with eps={eps} Circles")
+plt.xlim(df['x'].min() - eps, df['x'].max() + eps)
+plt.ylim(df['y'].min() - eps, df['y'].max() + eps)
+plt.grid(True)
 plt.show()
