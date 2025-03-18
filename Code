@@ -40,3 +40,21 @@ def elliptic_outliers(df, group_col, value_cols):
 
 df = elliptic_outliers(df, 'group', ['coupon', 'maturity'])
 print(df)
+
+
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
+def dbscan_outliers(df, group_col, value_cols):
+    def detect(group):
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(group[value_cols])
+        model = DBSCAN(eps=1.5, min_samples=3)
+        labels = model.fit_predict(X_scaled)
+        group['outlier'] = labels == -1  # Outliers have label -1
+        return group
+
+    return df.groupby(group_col, group_keys=False).apply(detect)
+
+df = dbscan_outliers(df, 'group', ['coupon', 'maturity'])
+print(df)
