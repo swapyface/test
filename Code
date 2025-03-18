@@ -2,59 +2,38 @@ import pandas as pd
 import numpy as np
 from scipy.spatial.distance import mahalanobis
 
-# Sample Data
+# Sample DataFrame
 df = pd.DataFrame({
-    'group': ['A', 'A', 'A', 'B', 'B', 'B', 'B'],
-    'coupon': [10, 12, 11, 100, 105, 102, 200],  
-    'maturity': [5, 6, 5.5, 20, 21, 20.5, 30]  
+    'group1': ['A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C'],
+    'group2': ['X', 'X', 'X', 'Y', 'Y', 'Y', 'Y', 'Z', 'Z'],
+    'coupon': [10, 12, 11, 100, 105, 102, 200, 50, 51],
+    'maturity': [5, 6, 5.5, 20, 21, 20.5, 30, 10, 11]
 })
 
-def mahalanobis_outliers(df, group_col, value_cols):
+def mahalanobis_outliers(df, group_cols, value_cols):
     def calculate_mahalanobis(group):
+        if len(group) < 3:  # Need at least 3 points for covariance calculation
+            group['mahalanobis_dist'] = np.nan
+            group['outlier'] = False
+            return group
+
         X = group[value_cols].values
         cov_matrix = np.cov(X, rowvar=False)
         inv_cov_matrix = np.linalg.inv(cov_matrix)
         mean_vec = np.mean(X, axis=0)
-        
+
         # Compute Mahalanobis distance
         distances = [mahalanobis(x, mean_vec, inv_cov_matrix) for x in X]
-        threshold = np.percentile(distances, 97.5)  # Top 2.5% as outliers
-        return distances > threshold  
+        group['mahalanobis_dist'] = distances
 
-    df['outlier'] = df.groupby(group_col).apply(lambda g: calculate_mahalanobis(g)).explode().values
-    return df
-
-df = mahalanobis_outliers(df, 'group', ['coupon', 'maturity'])
-print(df)
-
-
-from sklearn.covariance import EllipticEnvelope
-
-def elliptic_outliers(df, group_col, value_cols):
-    def detect(group):
-        model = EllipticEnvelope(contamination=0.05)
-        group['outlier'] = model.fit_predict(group[value_cols]) == -1
+        # Set threshold (e.g., top 2.5% outliers)
+        threshold = np.percentile(distances, 97.5)
+        group['outlier'] = group['mahalanobis_dist'] > threshold
         return group
 
-    return df.groupby(group_col, group_keys=False).apply(detect)
+    return df.groupby(group_cols, group_keys=False).apply(calculate_mahalanobis)
 
-df = elliptic_outliers(df, 'group', ['coupon', 'maturity'])
-print(df)
+# Apply function with multiple grouping columns
+df = mahalanobis_outliers(df, ['group1', 'group2'], ['coupon', 'maturity'])
 
-
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
-
-def dbscan_outliers(df, group_col, value_cols):
-    def detect(group):
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(group[value_cols])
-        model = DBSCAN(eps=1.5, min_samples=3)
-        labels = model.fit_predict(X_scaled)
-        group['outlier'] = labels == -1  # Outliers have label -1
-        return group
-
-    return df.groupby(group_col, group_keys=False).apply(detect)
-
-df = dbscan_outliers(df, 'group', ['coupon', 'maturity'])
 print(df)
