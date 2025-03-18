@@ -2,12 +2,14 @@ import pandas as pd
 import numpy as np
 from scipy.spatial.distance import mahalanobis
 
-# Sample DataFrame
+# Sample DataFrame with extra columns (not used in the model)
 df = pd.DataFrame({
     'group1': ['A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C'],
     'group2': ['X', 'X', 'X', 'Y', 'Y', 'Y', 'Y', 'Z', 'Z'],
     'coupon': [10, 12, 11, 100, 105, 102, 200, 50, 51],
-    'maturity': [5, 6, 5.5, 20, 21, 20.5, 30, 10, 11]
+    'maturity': [5, 6, 5.5, 20, 21, 20.5, 30, 10, 11],
+    'spread': [1.2, 1.1, 1.3, 2.5, 2.6, 2.7, 5.0, 0.9, 1.0],  # Extra column
+    'rating': ['AA', 'AA', 'AA', 'BBB', 'BBB', 'BBB', 'BBB', 'A', 'A']  # Another extra column
 })
 
 def mahalanobis_outliers(df, group_cols, value_cols):
@@ -33,7 +35,15 @@ def mahalanobis_outliers(df, group_cols, value_cols):
 
     return df.groupby(group_cols, group_keys=False).apply(calculate_mahalanobis)
 
-# Apply function with multiple grouping columns
-df = mahalanobis_outliers(df, ['group1', 'group2'], ['coupon', 'maturity'])
+# Define columns to use in the outlier model
+group_cols = ['group1', 'group2']  # Grouping columns
+value_cols = ['coupon', 'maturity']  # Only these will be used in the model
 
-print(df)
+# Run Mahalanobis outlier detection
+df_outliers = mahalanobis_outliers(df, group_cols, value_cols)
+
+# Keep only relevant columns in the final result
+df_result = df_outliers[group_cols + value_cols + ['mahalanobis_dist', 'outlier'] + 
+                        [col for col in df.columns if col not in value_cols and col not in group_cols]]
+
+print(df_result)
