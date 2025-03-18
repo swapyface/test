@@ -1,48 +1,42 @@
 import pandas as pd
 import numpy as np
+from scipy.spatial.distance import mahalanobis
 
-# Sample DataFrame
+# Sample Data
 df = pd.DataFrame({
     'group': ['A', 'A', 'A', 'B', 'B', 'B', 'B'],
-    'coupon': [10, 12, 11, 100, 105, 102, 200]  # Notice drastic change in B
+    'coupon': [10, 12, 11, 100, 105, 102, 200],  
+    'maturity': [5, 6, 5.5, 20, 21, 20.5, 30]  
 })
 
-# Calculate Z-score within each group
-df['z_score'] = df.groupby('group')['coupon'].transform(lambda x: (x - x.mean()) / x.std())
+def mahalanobis_outliers(df, group_col, value_cols):
+    def calculate_mahalanobis(group):
+        X = group[value_cols].values
+        cov_matrix = np.cov(X, rowvar=False)
+        inv_cov_matrix = np.linalg.inv(cov_matrix)
+        mean_vec = np.mean(X, axis=0)
+        
+        # Compute Mahalanobis distance
+        distances = [mahalanobis(x, mean_vec, inv_cov_matrix) for x in X]
+        threshold = np.percentile(distances, 97.5)  # Top 2.5% as outliers
+        return distances > threshold  
 
-# Flag outliers (e.g., Z-score > 3 or < -3)
-df['outlier'] = df['z_score'].abs() > 3
-
-print(df)
-
-
-def detect_outliers_iqr(df, group_col, value_col):
-    def iqr_outliers(group):
-        Q1 = group.quantile(0.25)
-        Q3 = group.quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        return (group < lower_bound) | (group > upper_bound)
-    
-    df['outlier'] = df.groupby(group_col)[value_col].transform(iqr_outliers)
+    df['outlier'] = df.groupby(group_col).apply(lambda g: calculate_mahalanobis(g)).explode().values
     return df
 
-df = detect_outliers_iqr(df, 'group', 'coupon')
+df = mahalanobis_outliers(df, 'group', ['coupon', 'maturity'])
 print(df)
 
 
-df['moving_avg'] = df.groupby('group')['coupon'].transform(lambda x: x.rolling(window=3, min_periods=1).mean())
-df['pct_change'] = df.groupby('group')['coupon'].transform(lambda x: x.pct_change())
+from sklearn.covariance import EllipticEnvelope
 
-# Flag drastic changes (e.g., greater than 50%)
-df['outlier'] = df['pct_change'].abs() > 0.5
+def elliptic_outliers(df, group_col, value_cols):
+    def detect(group):
+        model = EllipticEnvelope(contamination=0.05)
+        group['outlier'] = model.fit_predict(group[value_cols]) == -1
+        return group
 
-print(df)
+    return df.groupby(group_col, group_keys=False).apply(detect)
 
-from sklearn.ensemble import IsolationForest
-
-# Fit Isolation Forest for each group
-df['outlier'] = df.groupby('group')['coupon'].transform(lambda x: IsolationForest(contamination=0.05, random_state=42).fit_predict(x.values.reshape(-1, 1)) == -1)
-
+df = elliptic_outliers(df, 'group', ['coupon', 'maturity'])
 print(df)
