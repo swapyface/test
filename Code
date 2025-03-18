@@ -1,32 +1,48 @@
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
 
 # Sample DataFrame
-np.random.seed(42)
 df = pd.DataFrame({
-    'x': np.random.uniform(0, 10, 100),
-    'y': np.random.uniform(0, 10, 100)
+    'group': ['A', 'A', 'A', 'B', 'B', 'B', 'B'],
+    'coupon': [10, 12, 11, 100, 105, 102, 200]  # Notice drastic change in B
 })
 
-# Set eps value for DBSCAN
-eps = 1.5  # Change this value to see different results
+# Calculate Z-score within each group
+df['z_score'] = df.groupby('group')['coupon'].transform(lambda x: (x - x.mean()) / x.std())
 
-# Scatter plot
-plt.figure(figsize=(8, 6))
-sns.scatterplot(x=df['x'], y=df['y'], color='blue', alpha=0.6)
+# Flag outliers (e.g., Z-score > 3 or < -3)
+df['outlier'] = df['z_score'].abs() > 3
 
-# Draw circles at each point to represent the eps radius
-for i in range(len(df)):
-    circle = plt.Circle((df.loc[i, 'x'], df.loc[i, 'y']), eps, color='red', fill=False, alpha=0.3)
-    plt.gca().add_patch(circle)
+print(df)
 
-# Labels and title
-plt.xlabel("X-axis")
-plt.ylabel("Y-axis")
-plt.title(f"Scatter Plot with eps={eps} Circles")
-plt.xlim(df['x'].min() - eps, df['x'].max() + eps)
-plt.ylim(df['y'].min() - eps, df['y'].max() + eps)
-plt.grid(True)
-plt.show()
+
+def detect_outliers_iqr(df, group_col, value_col):
+    def iqr_outliers(group):
+        Q1 = group.quantile(0.25)
+        Q3 = group.quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        return (group < lower_bound) | (group > upper_bound)
+    
+    df['outlier'] = df.groupby(group_col)[value_col].transform(iqr_outliers)
+    return df
+
+df = detect_outliers_iqr(df, 'group', 'coupon')
+print(df)
+
+
+df['moving_avg'] = df.groupby('group')['coupon'].transform(lambda x: x.rolling(window=3, min_periods=1).mean())
+df['pct_change'] = df.groupby('group')['coupon'].transform(lambda x: x.pct_change())
+
+# Flag drastic changes (e.g., greater than 50%)
+df['outlier'] = df['pct_change'].abs() > 0.5
+
+print(df)
+
+from sklearn.ensemble import IsolationForest
+
+# Fit Isolation Forest for each group
+df['outlier'] = df.groupby('group')['coupon'].transform(lambda x: IsolationForest(contamination=0.05, random_state=42).fit_predict(x.values.reshape(-1, 1)) == -1)
+
+print(df)
