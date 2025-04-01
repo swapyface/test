@@ -1,63 +1,19 @@
-import pandas as pd
-from datetime import datetime
 
-def calculate_years(mat_date_str, issue_date_str):
-    """
-    Calculates the number of years between two dates given as strings.
 
-    Args:
-        mat_date_str (str): The maturity date string (e.g., '11-12-2014').
-        issue_date_str (str): The issue date string (e.g., '11/23/2024').
+Topics
 
-    Returns:
-        int: The number of years between the two dates.
-    """
-    try:
-        mat_date = datetime.strptime(mat_date_str, '%m-%d-%Y')
-        issue_date = datetime.strptime(issue_date_str, '%m/%d/%Y')
-        
-        years = (issue_date - mat_date).days // 365
-        return years
-    except ValueError as e:
-        print(f"Error parsing dates: {e}")
-        return None
+Companies
+Given two strings s and t, return true if s is a subsequence of t, or false otherwise.
 
-def calculate_years_dataframe(df, mat_col, issue_col, result_col='years'):
-    """
-    Calculates the number of years between two date columns in a DataFrame.
+A subsequence of a string is a new string that is formed from the original string by deleting some (can be none) of the characters without disturbing the relative positions of the remaining characters. (i.e., "ace" is a subsequence of "abcde" while "aec" is not).
 
-    Args:
-        df (pd.DataFrame): The DataFrame containing the date columns.
-        mat_col (str): The name of the maturity date column.
-        issue_col (str): The name of the issue date column.
-        result_col (str): The name of the new column to store the result.
+ 
 
-    Returns:
-        pd.DataFrame: The DataFrame with the new 'years' column.
-    """
-    df[result_col] = df.apply(lambda row: calculate_years(row[mat_col], row[issue_col]), axis=1)
-    return df
+Example 1:
 
-# Example usage with a DataFrame:
-data = {'Mat Date': ['11-12-2014', '01-01-2020','05-05-2000'],
-        'Issue Date': ['11/23/2024','01/01/2025','05/05/2030']}
-df = pd.DataFrame(data)
+Input: s = "abc", t = "ahbgdc"
+Output: true
+Example 2:
 
-df = calculate_years_dataframe(df, 'Mat Date', 'Issue Date')
-print(df)
-
-# Example usage with single date strings:
-mat_date_str = '11-12-2014'
-issue_date_str = '11/23/2024'
-years = calculate_years(mat_date_str, issue_date_str)
-print(f"Number of years: {years}")
-
-mat_date_str2 = '01-01-2020'
-issue_date_str2 = '01/01/2025'
-years2 = calculate_years(mat_date_str2, issue_date_str2)
-print(f"Number of years: {years2}")
-
-mat_date_str3 = '05-05-2000'
-issue_date_str3 = '05/05/2030'
-years3 = calculate_years(mat_date_str3, issue_date_str3)
-print(f"Number of years: {years3}")
+Input: s = "axc", t = "ahbgdc"
+Output: false
