@@ -55,3 +55,4 @@ print(merged_df[['item_id', 'category', 'product_name', price_uat_col, price_pro
 
 # If you want to save this to a new Excel file:
 # merged_df.to_excel("comparison_with_diff_comments.xlsx", index=False)
+
