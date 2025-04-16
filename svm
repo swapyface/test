@@ -1,33 +1,39 @@
 import pandas as pd
+import numpy as np
 
 # Load the Excel files
 uat_df = pd.read_excel("uat.xlsx")
 prod_df = pd.read_excel("prod.xlsx")
 
-# Define key columns for joining
+# Define key columns
 key_columns = ['id1', 'id2', 'category']
 
-# Merge the two datasets on the key columns
+# Merge on key columns
 merged_df = pd.merge(uat_df, prod_df, on=key_columns, suffixes=('_uat', '_prod'))
 
-# Compare columns and store mismatches
+# List to hold mismatches
 mismatches = []
 
-# Loop through all columns except the key columns
-for col in uat_df.columns:
-    if col not in key_columns:
-        uat_col = f"{col}_uat"
-        prod_col = f"{col}_prod"
+# Columns to compare (non-key columns)
+compare_columns = [col for col in uat_df.columns if col not in key_columns]
 
-        # Check if columns exist (some may not match perfectly)
-        if uat_col in merged_df.columns and prod_col in merged_df.columns:
-            diff = merged_df[uat_col] != merged_df[prod_col]
-            mismatch_rows = merged_df[diff][key_columns + [uat_col, prod_col]]
-            if not mismatch_rows.empty:
-                mismatch_rows['column_name'] = col
-                mismatches.append(mismatch_rows)
+for col in compare_columns:
+    uat_col = f"{col}_uat"
+    prod_col = f"{col}_prod"
 
-# Combine all mismatches into a single DataFrame
+    if uat_col in merged_df.columns and prod_col in merged_df.columns:
+        # Coerce both columns to string for clean comparison, also handle NaNs
+        uat_values = merged_df[uat_col].astype(str).fillna('nan')
+        prod_values = merged_df[prod_col].astype(str).fillna('nan')
+        
+        diff = uat_values != prod_values
+        mismatch_rows = merged_df[diff][key_columns + [uat_col, prod_col]]
+        
+        if not mismatch_rows.empty:
+            mismatch_rows['column_name'] = col
+            mismatches.append(mismatch_rows)
+
+# Combine mismatches
 if mismatches:
     mismatch_df = pd.concat(mismatches, ignore_index=True)
     mismatch_df.to_excel("mismatches.xlsx", index=False)
