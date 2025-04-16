@@ -1,13 +1,16 @@
 import pandas as pd
 
-def find_excel_mismatches(file1_path, file2_path, key_columns):
+def compare_excel_fill_na(file1_path, file2_path, key_columns, fill_value=None, output_excel_path="comparison_results.xlsx"):
     """
-    Compares two Excel sheets based on specified key columns and prints mismatches.
+    Compares two Excel sheets after filling NaN values, prints mismatches,
+    and generates an Excel file with the comparison results.
 
     Args:
         file1_path (str): Path to the first Excel file.
         file2_path (str): Path to the second Excel file.
         key_columns (list): A list of column names to use as keys for comparison.
+        fill_value: The value to fill NaN values with. If None, NaN remains.
+        output_excel_path (str): Path to save the comparison results Excel file.
     """
     try:
         df1 = pd.read_excel(file1_path)
@@ -22,59 +25,86 @@ def find_excel_mismatches(file1_path, file2_path, key_columns):
             print(f"Error: Key column '{col}' not found in one or both Excel files.")
             return
 
+    # Fill NaN values
+    df1_filled = df1.fillna(fill_value)
+    df2_filled = df2.fillna(fill_value)
+
     # Create a combined key for each row
-    df1['combined_key'] = df1[key_columns].astype(str).agg('-'.join, axis=1)
-    df2['combined_key'] = df2[key_columns].astype(str).agg('-'.join, axis=1)
+    df1_filled['combined_key'] = df1_filled[key_columns].astype(str).agg('-'.join, axis=1)
+    df2_filled['combined_key'] = df2_filled[key_columns].astype(str).agg('-'.join, axis=1)
 
     # Merge the dataframes based on the combined key
-    merged_df = pd.merge(df1, df2, on='combined_key', suffixes=('_file1', '_file2'), how='outer', indicator=True)
+    merged_df = pd.merge(df1_filled, df2_filled, on='combined_key', suffixes=('_file1', '_file2'), how='outer', indicator=True)
 
     mismatches_found = False
+    comparison_data = []
 
     # Iterate through rows where the key exists in both files
     both_files_df = merged_df[merged_df['_merge'] == 'both']
     for index, row in both_files_df.iterrows():
         mismatches = {}
+        row_comparison = {}
+        key_values = {key: row[f"{key}_file1"] for key in key_columns}
+        row_comparison.update(key_values)
+
         for col in df1.columns:
             if col not in key_columns and f"{col}_file1" in row and f"{col}_file2" in row:
                 value1 = row[f"{col}_file1"]
                 value2 = row[f"{col}_file2"]
-                if pd.isna(value1) and not pd.isna(value2):
-                    mismatches[col] = (None, value2)
-                elif not pd.isna(value1) and pd.isna(value2):
-                    mismatches[col] = (value1, None)
-                elif not pd.isna(value1) and not pd.isna(value2) and value1 != value2:
+                row_comparison[f"{col}_File1"] = value1
+                row_comparison[f"{col}_File2"] = value2
+                if value1 != value2:
                     mismatches[col] = (value1, value2)
 
         if mismatches:
             mismatches_found = True
-            key_values = {key: row[f"{key}_file1"] for key in key_columns}
             print(f"Mismatch found for keys: {key_values}")
             for col, (val1, val2) in mismatches.items():
                 print(f"  - Column: {col}, File 1 Value: {val1}, File 2 Value: {val2}")
             print("-" * 30)
+            row_comparison['Mismatch'] = 'Yes'
+        else:
+            row_comparison['Mismatch'] = 'No'
+        comparison_data.append(row_comparison)
 
-    # Print rows present only in one of the files
-    only_file1 = merged_df[merged_df['_merge'] == 'left_only']
+    # Handle rows present only in one of the files
+    only_file1 = merged_df[merged_df['_merge'] == 'left_only'].copy()
     if not only_file1.empty:
         print("\nRows present only in File 1:")
         for index, row in only_file1.iterrows():
             key_values = {col: row[col] for col in key_columns}
             print(f"  - Keys: {key_values}")
+            row_dict = {f"{col}_File1": row[col] for col in df1.columns}
+            row_dict.update({f"{col}_File2": None for col in df1.columns if col not in key_columns})
+            row_dict.update(key_values)
+            row_dict['Mismatch'] = 'Only in File 1'
+            comparison_data.append(row_dict)
 
-    only_file2 = merged_df[merged_df['_merge'] == 'right_only']
+    only_file2 = merged_df[merged_df['_merge'] == 'right_only'].copy()
     if not only_file2.empty:
         print("\nRows present only in File 2:")
         for index, row in only_file2.iterrows():
             key_values = {col: row[col] for col in key_columns}
             print(f"  - Keys: {key_values}")
+            row_dict = {f"{col}_File2": row[col] for col in df2.columns}
+            row_dict.update({f"{col}_File1": None for col in df2.columns if col not in key_columns})
+            row_dict.update(key_values)
+            row_dict['Mismatch'] = 'Only in File 2'
+            comparison_data.append(row_dict)
 
     if not mismatches_found and only_file1.empty and only_file2.empty:
-        print("\nNo mismatches found between the two Excel sheets based on the provided keys.")
+        print("\nNo mismatches found between the two Excel sheets based on the provided keys (after filling NaN).")
+
+    # Generate the comparison results Excel file
+    comparison_df = pd.DataFrame(comparison_data)
+    comparison_df.to_excel(output_excel_path, index=False)
+    print(f"\nComparison results saved to: {output_excel_path}")
 
 if __name__ == "__main__":
     file1 = "uat_data.xlsx"  # Replace with the actual path to your UAT Excel file
     file2 = "prod_data.xlsx" # Replace with the actual path to your PROD Excel file
     key_columns_to_compare = ["item_id", "category", "product_name"] # Replace with your actual key column names
+    na_fill_value = "N/A"  # Specify the value to fill NaN with, or set to None to keep NaN
+    output_file = "excel_comparison_results.xlsx" # Specify the name for the output Excel file
 
-    find_excel_mismatches(file1, file2, key_columns_to_compare)
+    compare_excel_fill_na(file1, file2, key_columns_to_compare, fill_value=na_fill_value, output_excel_path=output_file)
