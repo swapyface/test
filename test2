@@ -1,58 +1,49 @@
 import pandas as pd
+from sklearn.cluster import DBSCAN
+import numpy as np
 
-# Assuming you have already loaded your two DataFrames as df_uat and df_prod
-# For demonstration purposes, let's create sample DataFrames:
-data_uat = {'item_id': [1, 1, 2, 3],
-            'category': ['A', 'A', 'B', 'C'],
-            'product_name': ['Product X', 'Product Y', 'Product Z', 'Product W'],
-            'price': [10.0, 20.5, 15.0, 25.0],
-            'other_col_uat': [100, 200, 300, 400]}
-df_uat = pd.DataFrame(data_uat)
+# Assuming you have the merged_df from the previous code
 
-data_prod = {'item_id': [1, 2, 2, 3],
-             'category': ['A', 'B', 'B', 'C'],
-             'product_name': ['Product X', 'Product Z', 'Product ZZ', 'Product W'],
-             'price': [10.0, 15.0, 16.0, 25.0],
-             'other_col_prod': [500, 600, 700, 800]}
-df_prod = pd.DataFrame(data_prod)
+# Apply DBSCAN only where a price mismatch is found and neither price is 0
+price_mismatch_df = merged_df[
+    (merged_df['comment'] == 'Price mismatch') &
+    (merged_df['price_uat'] != 0) &
+    (merged_df['price_prod'] != 0) &
+    (~merged_df['price_difference'].isna())
+].copy()
 
-key_columns = ["item_id", "category", "product_name"]
-price_column = "price"
+if not price_mismatch_df.empty:
+    # Reshape the price difference column for DBSCAN
+    price_diff_array = price_mismatch_df['price_difference'].values.reshape(-1, 1)
 
-# Merge the two DataFrames based on the key columns
-merged_df = pd.merge(df_uat, df_prod, on=key_columns, suffixes=('_uat', '_prod'), how='outer')
+    # Apply DBSCAN
+    dbscan = DBSCAN(eps=0.5, min_samples=2)  # Adjust eps and min_samples as needed
+    clusters = dbscan.fit_predict(price_diff_array)
 
-# Create 'comment' and 'price_difference' columns
-merged_df['comment'] = ''
-merged_df['price_difference'] = None
+    # Add outlier labels to the price_mismatch_df
+    price_mismatch_df['outlier_dbscan'] = np.where(clusters == -1, 'Outlier', 'Not Outlier')
 
-# Identify rows present in both DataFrames
-both_files_mask = merged_df['_merge'] == 'both'
+    # Merge the outlier labels back into the original merged_df
+    merged_df = pd.merge(merged_df,
+                             price_mismatch_df[['item_id', 'category', 'product_name', 'outlier_dbscan']],
+                             on=key_columns,
+                             how='left')
 
-# Calculate price difference and add comments for mismatches
-price_uat_col = f"{price_column}_uat"
-price_prod_col = f"{price_column}_prod"
+    # Fill NaN in 'outlier_dbscan' with 'Not Applicable' for rows without price mismatch
+    merged_df['outlier_dbscan'] = merged_df['outlier_dbscan'].fillna('Not Applicable')
+else:
+    merged_df['outlier_dbscan'] = 'Not Applicable'
+    print("No price mismatches found (excluding cases with 0 price) to apply DBSCAN.")
 
-# Calculate difference where both prices are present
-both_prices_present = both_files_mask & ~pd.isna(merged_df[price_uat_col]) & ~pd.isna(merged_df[price_prod_col])
-merged_df.loc[both_prices_present & (merged_df[price_uat_col] != merged_df[price_prod_col]), 'price_difference'] = abs(merged_df[price_uat_col] - merged_df[price_prod_col])
-merged_df.loc[both_prices_present & (merged_df[price_uat_col] != merged_df[price_prod_col]), 'comment'] = 'Price mismatch'
+# Label as 'Excluded' if price is 0 in either UAT or PROD where a mismatch exists
+zero_price_mismatch = merged_df[
+    (merged_df['comment'].str.contains('Price mismatch')) &
+    ((merged_df['price_uat'] == 0) | (merged_df['price_prod'] == 0))
+].index
+merged_df.loc[zero_price_mismatch, 'outlier_dbscan'] = 'Excluded'
 
-# Add comments for missing prices
-merged_df.loc[both_files_mask & pd.isna(merged_df[price_uat_col]) & ~pd.isna(merged_df[price_prod_col]), 'comment'] = 'Price mismatch (missing in UAT)'
-merged_df.loc[both_files_mask & ~pd.isna(merged_df[price_uat_col]) & pd.isna(merged_df[price_prod_col]), 'comment'] = 'Price mismatch (missing in PROD)'
-
-# Identify rows missing in UAT
-missing_in_uat_mask = merged_df['_merge'] == 'right_only'
-merged_df.loc[missing_in_uat_mask, 'comment'] = 'Missing row in UAT'
-
-# Identify rows missing in PROD
-missing_in_prod_mask = merged_df['_merge'] == 'left_only'
-merged_df.loc[missing_in_prod_mask, 'comment'] = 'Missing row in PROD'
-
-# Print the merged DataFrame with the comment and price difference columns
-print(merged_df[['item_id', 'category', 'product_name', price_uat_col, price_prod_col, 'price_difference', 'comment']])
+# Print the merged DataFrame with the outlier detection column
+print(merged_df[['item_id', 'category', 'product_name', 'price_uat', 'price_prod', 'price_difference', 'comment', 'outlier_dbscan']])
 
 # If you want to save this to a new Excel file:
-# merged_df.to_excel("comparison_with_diff_comments.xlsx", index=False)
-
+# merged_df.to_excel("comparison_with_outliers.xlsx", index=False)
