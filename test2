@@ -22,14 +22,25 @@ price_column = "price"
 # Merge the two DataFrames based on the key columns
 merged_df = pd.merge(df_uat, df_prod, on=key_columns, suffixes=('_uat', '_prod'), how='outer')
 
-# Create a new 'comment' column
+# Create 'comment' and 'price_difference' columns
 merged_df['comment'] = ''
+merged_df['price_difference'] = None
 
-# Identify mismatches in price for rows present in both
+# Identify rows present in both DataFrames
 both_files_mask = merged_df['_merge'] == 'both'
-merged_df.loc[both_files_mask & (merged_df[f"{price_column}_uat"] != merged_df[f"{price_column}_prod"]), 'comment'] = 'Price mismatch'
-merged_df.loc[both_files_mask & (pd.isna(merged_df[f"{price_column}_uat"]) & ~pd.isna(merged_df[f"{price_column}_prod"])), 'comment'] = 'Price mismatch (missing in UAT)'
-merged_df.loc[both_files_mask & (~pd.isna(merged_df[f"{price_column}_uat"]) & pd.isna(merged_df[f"{price_column}_prod"])), 'comment'] = 'Price mismatch (missing in PROD)'
+
+# Calculate price difference and add comments for mismatches
+price_uat_col = f"{price_column}_uat"
+price_prod_col = f"{price_column}_prod"
+
+# Calculate difference where both prices are present
+both_prices_present = both_files_mask & ~pd.isna(merged_df[price_uat_col]) & ~pd.isna(merged_df[price_prod_col])
+merged_df.loc[both_prices_present & (merged_df[price_uat_col] != merged_df[price_prod_col]), 'price_difference'] = abs(merged_df[price_uat_col] - merged_df[price_prod_col])
+merged_df.loc[both_prices_present & (merged_df[price_uat_col] != merged_df[price_prod_col]), 'comment'] = 'Price mismatch'
+
+# Add comments for missing prices
+merged_df.loc[both_files_mask & pd.isna(merged_df[price_uat_col]) & ~pd.isna(merged_df[price_prod_col]), 'comment'] = 'Price mismatch (missing in UAT)'
+merged_df.loc[both_files_mask & ~pd.isna(merged_df[price_uat_col]) & pd.isna(merged_df[price_prod_col]), 'comment'] = 'Price mismatch (missing in PROD)'
 
 # Identify rows missing in UAT
 missing_in_uat_mask = merged_df['_merge'] == 'right_only'
@@ -39,8 +50,8 @@ merged_df.loc[missing_in_uat_mask, 'comment'] = 'Missing row in UAT'
 missing_in_prod_mask = merged_df['_merge'] == 'left_only'
 merged_df.loc[missing_in_prod_mask, 'comment'] = 'Missing row in PROD'
 
-# Print the merged DataFrame with the comment column
-print(merged_df[['item_id', 'category', 'product_name', f'{price_column}_uat', f'{price_column}_prod', 'comment']])
+# Print the merged DataFrame with the comment and price difference columns
+print(merged_df[['item_id', 'category', 'product_name', price_uat_col, price_prod_col, 'price_difference', 'comment']])
 
 # If you want to save this to a new Excel file:
-# merged_df.to_excel("comparison_with_comments.xlsx", index=False)
+# merged_df.to_excel("comparison_with_diff_comments.xlsx", index=False)
