@@ -1,0 +1,46 @@
+import pandas as pd
+
+# Assuming you have already loaded your two DataFrames as df_uat and df_prod
+# For demonstration purposes, let's create sample DataFrames:
+data_uat = {'item_id': [1, 1, 2, 3],
+            'category': ['A', 'A', 'B', 'C'],
+            'product_name': ['Product X', 'Product Y', 'Product Z', 'Product W'],
+            'price': [10.0, 20.5, 15.0, 25.0],
+            'other_col_uat': [100, 200, 300, 400]}
+df_uat = pd.DataFrame(data_uat)
+
+data_prod = {'item_id': [1, 2, 2, 3],
+             'category': ['A', 'B', 'B', 'C'],
+             'product_name': ['Product X', 'Product Z', 'Product ZZ', 'Product W'],
+             'price': [10.0, 15.0, 16.0, 25.0],
+             'other_col_prod': [500, 600, 700, 800]}
+df_prod = pd.DataFrame(data_prod)
+
+key_columns = ["item_id", "category", "product_name"]
+price_column = "price"
+
+# Merge the two DataFrames based on the key columns
+merged_df = pd.merge(df_uat, df_prod, on=key_columns, suffixes=('_uat', '_prod'), how='outer')
+
+# Create a new 'comment' column
+merged_df['comment'] = ''
+
+# Identify mismatches in price for rows present in both
+both_files_mask = merged_df['_merge'] == 'both'
+merged_df.loc[both_files_mask & (merged_df[f"{price_column}_uat"] != merged_df[f"{price_column}_prod"]), 'comment'] = 'Price mismatch'
+merged_df.loc[both_files_mask & (pd.isna(merged_df[f"{price_column}_uat"]) & ~pd.isna(merged_df[f"{price_column}_prod"])), 'comment'] = 'Price mismatch (missing in UAT)'
+merged_df.loc[both_files_mask & (~pd.isna(merged_df[f"{price_column}_uat"]) & pd.isna(merged_df[f"{price_column}_prod"])), 'comment'] = 'Price mismatch (missing in PROD)'
+
+# Identify rows missing in UAT
+missing_in_uat_mask = merged_df['_merge'] == 'right_only'
+merged_df.loc[missing_in_uat_mask, 'comment'] = 'Missing row in UAT'
+
+# Identify rows missing in PROD
+missing_in_prod_mask = merged_df['_merge'] == 'left_only'
+merged_df.loc[missing_in_prod_mask, 'comment'] = 'Missing row in PROD'
+
+# Print the merged DataFrame with the comment column
+print(merged_df[['item_id', 'category', 'product_name', f'{price_column}_uat', f'{price_column}_prod', 'comment']])
+
+# If you want to save this to a new Excel file:
+# merged_df.to_excel("comparison_with_comments.xlsx", index=False)
