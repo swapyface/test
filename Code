@@ -1,121 +1,83 @@
+import pandas as pd
+from sklearn.cluster import DBSCAN
+import numpy as np
 
+# Assuming you have your two DataFrames loaded as df_uat and df_prod
+# and you have defined key_columns and comparison_variables
 
-Topics
+# Example of multiple comparison variables
+comparison_variables = ["price", "quantity", "discount_percent"]
 
-Companies
-Given two strings s and t, return true if s is a subsequence of t, or false otherwise.
+# Merge the DataFrames
+merged_df = pd.merge(df_uat, df_prod, on=key_columns, suffixes=('_uat', '_prod'), how='outer')
 
-A subsequence of a string is a new string that is formed from the original string by deleting some (can be none) of the characters without disturbing the relative positions of the remaining characters. (i.e., "ace" is a subsequence of "abcde" while "aec" is not).
+# Initialize comment column
+merged_df['comment'] = ''
 
- 
+for var in comparison_variables:
+    uat_col = f"{var}_uat"
+    prod_col = f"{var}_prod"
+    pct_diff_col = f"{var}_percentage_difference"
+    outlier_col = f"{var}_outlier_dbscan"
 
-Example 1:
+    # Create percentage difference column
+    merged_df[pct_diff_col] = None
 
-Input: s = "abc", t = "ahbgdc"
-Output: true
-Example 2:
+    # Identify rows present in both
+    both_files_mask = merged_df['_merge'] == 'both'
 
-Input: s = "axc", t = "ahbgdc"
-Output: false
+    # Calculate percentage difference where both values are non-zero
+    non_zero_mask = both_files_mask & (merged_df[uat_col] != 0) & (merged_df[prod_col] != 0)
+    merged_df.loc[non_zero_mask & (merged_df[uat_col] != merged_df[prod_col]), pct_diff_col] = (
+        abs(merged_df[uat_col] - merged_df[prod_col]) / ((abs(merged_df[uat_col]) + abs(merged_df[prod_col])) / 2)
+    ) * 100
 
+    # Add comments for mismatches
+    merged_df.loc[both_files_mask & (merged_df[uat_col] != merged_df[prod_col]), 'comment'] += f'{var} mismatch, '
+    merged_df.loc[both_files_mask & pd.isna(merged_df[uat_col]) & ~pd.isna(merged_df[prod_col]), 'comment'] += f'{var} missing in UAT, '
+    merged_df.loc[both_files_mask & ~pd.isna(merged_df[uat_col]) & pd.isna(merged_df[prod_col]), 'comment'] += f'{var} missing in PROD, '
 
-class Solution:
-    def isSubsequence(self, s: str, t: str) -> bool:
-        sp = tp = 0
+    # Apply DBSCAN if there are percentage differences
+    pct_diff_for_dbscan = merged_df[both_files_mask & ~merged_df[pct_diff_col].isna()][pct_diff_col].values.reshape(-1, 1)
 
-        while sp < len(s) and tp < len(t):
-            if s[sp] == t[tp]:
-                sp += 1
-            tp += 1
-        
-        return sp == len(s)
+    if pct_diff_for_dbscan.shape[0] >= 2:
+        dbscan = DBSCAN(eps=0.5, min_samples=2)  # Adjust eps and min_samples as needed for percentage differences
+        clusters = dbscan.fit_predict(pct_diff_for_dbscan)
 
+        # Create a temporary DataFrame to align DBSCAN results
+        temp_dbscan_df = merged_df[both_files_mask & ~merged_df[pct_diff_col].isna()].copy()
+        temp_dbscan_df[outlier_col] = np.where(clusters == -1, 'Outlier', 'Not Outlier')
 
-You are given an integer array nums consisting of n elements, and an integer k.
+        # Merge outlier labels back into the main DataFrame
+        merged_df = pd.merge(merged_df,
+                                 temp_dbscan_df[key_columns + [outlier_col]],
+                                 on=key_columns,
+                                 how='left')
+        merged_df[outlier_col] = merged_df[outlier_col].fillna('Not Applicable')
+    else:
+        merged_df[outlier_col] = 'Not Applicable'
+        print(f"Not enough percentage differences found for {var} to apply DBSCAN.")
 
-Find a contiguous subarray whose length is equal to k that has the maximum average value and return this value. Any answer with a calculation error less than 10-5 will be accepted.
+    # For rows with mismatch but zero in either UAT or PROD, mark as excluded
+    zero_mismatch_mask = merged_df[
+        (merged_df['comment'].str.contains(f'{var} mismatch')) &
+        ((merged_df[uat_col] == 0) | (merged_df[prod_col] == 0))
+    ].index
+    merged_df.loc[zero_mismatch_mask, outlier_col] = 'Excluded'
 
- 
+# Identify rows missing in UAT/PROD and add to comment
+missing_in_uat_mask = merged_df['_merge'] == 'right_only'
+merged_df.loc[missing_in_uat_mask, 'comment'] += 'Missing row in UAT'
 
-Example 1:
+missing_in_prod_mask = merged_df['_merge'] == 'left_only'
+merged_df.loc[missing_in_prod_mask, 'comment'] += 'Missing row in PROD'
 
-Input: nums = [1,12,-5,-6,50,3], k = 4
-Output: 12.75000
-Explanation: Maximum average is (12 - 5 - 6 + 50) / 4 = 51 / 4 = 12.75
-Example 2:
+# Clean up the comment column (remove trailing ', ')
+merged_df['comment'] = merged_df['comment'].str.rstrip(', ')
 
-Input: nums = [5], k = 1
-Output: 5.00000
+# Print the merged DataFrame with the comparison results
+output_columns = key_columns + [f'{var}_uat' for var in comparison_variables] + [f'{var}_prod' for var in comparison_variables] + [f'{var}_percentage_difference' for var in comparison_variables] + ['comment'] + [f'{var}_outlier_dbscan' for var in comparison_variables]
+print(merged_df[output_columns])
 
-
-class Solution:
-    def increasingTriplet(self, nums: List[int]) -> bool:
-        first_num = float("inf")
-        second_num = float("inf")
-        for n in nums:
-            if n <= first_num:
-                first_num = n
-            elif n <= second_num:
-                second_num = n
-            else:
-                return True
-        return False
-
-There is a biker going on a road trip. The road trip consists of n + 1 points at different altitudes. The biker starts his trip on point 0 with altitude equal 0.
-
-You are given an integer array gain of length n where gain[i] is the net gain in altitude between points i​​​​​​ and i + 1 for all (0 <= i < n). Return the highest altitude of a point.
-
- 
-
-Example 1:
-
-Input: gain = [-5,1,5,0,-7]
-Output: 1
-Explanation: The altitudes are [0,-5,-4,1,1,-6]. The highest is 1.
-Example 2:
-
-Input: gain = [-4,-3,-2,-1,4,3,2]
-Output: 0
-Explanation: The altitudes are [0,-4,-7,-9,-10,-6,-3,-1]. The highest is 0.
-
-
-Easy
-
-Topics
-
-Companies
-
-Hint
-Given an array of integers nums, calculate the pivot index of this array.
-
-The pivot index is the index where the sum of all the numbers strictly to the left of the index is equal to the sum of all the numbers strictly to the index's right.
-
-If the index is on the left edge of the array, then the left sum is 0 because there are no elements to the left. This also applies to the right edge of the array.
-
-Return the leftmost pivot index. If no such index exists, return -1.
-
- 
-
-Example 1:
-
-Input: nums = [1,7,3,6,5,6]
-Output: 3
-Explanation:
-The pivot index is 3.
-Left sum = nums[0] + nums[1] + nums[2] = 1 + 7 + 3 = 11
-Right sum = nums[4] + nums[5] = 5 + 6 = 11
-Example 2:
-
-Input: nums = [1,2,3]
-Output: -1
-Explanation:
-There is no index that satisfies the conditions in the problem statement.
-Example 3:
-
-Input: nums = [2,1,-1]
-Output: 0
-Explanation:
-The pivot index is 0.
-Left sum = 0 (no elements to the left of index 0)
-Right sum = nums[1] + nums[2] = 1 + -1 = 0
- 
+# If you want to save this to a new Excel file:
+# merged_df.to_excel("comparison_with_pct_outliers.xlsx", index=False)
