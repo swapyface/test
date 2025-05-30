@@ -1,83 +1,87 @@
-import pandas as pd
-from sklearn.cluster import DBSCAN
-import numpy as np
+from datetime import datetime
+from dateutil.parser import parse
+from dateutil.relativedelta import relativedelta
+import re # For regular expressions to help find date-like patterns
 
-# Assuming you have your two DataFrames loaded as df_uat and df_prod
-# and you have defined key_columns and comparison_variables
+def extract_dates_from_email(email_body):
+    """
+    Extracts dates from an email body, handling various natural language formats.
+    Attempts to be more robust by looking for common date patterns.
 
-# Example of multiple comparison variables
-comparison_variables = ["price", "quantity", "discount_percent"]
+    Args:
+        email_body (str): The text content of the email.
 
-# Merge the DataFrames
-merged_df = pd.merge(df_uat, df_prod, on=key_columns, suffixes=('_uat', '_prod'), how='outer')
+    Returns:
+        list: A list of datetime objects found in the email body.
+              Returns an empty list if no dates are found or can be parsed.
+    """
+    extracted_dates = []
+    seen_dates_str = set()
+    current_time_for_default = datetime.now() # Use this as the base for relative dates
 
-# Initialize comment column
-merged_df['comment'] = ''
+    # Define a list of common date-related patterns to search for
+    # These patterns help guide dateutil by giving it smaller, more relevant chunks.
+    # This is not exhaustive but covers common cases.
+    date_patterns = [
+        r'\b(?:next|last|this)\s+(?:(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day|week|month|year)\b',
+        r'\bend of (?:next|this|the) month\b',
+        r'\bbeginning of (?:next|this|the) month\b',
+        r'\b(?:tomorrow|yesterday|today)\b',
+        r'\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b', # e.g., 25th Dec 2024
+        r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?\b', # e.g., Dec 25, 2024 or June 20
+        r'\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b', # YYYY-MM-DD or YYYY/MM/DD
+        r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b', # MM-DD-YY or DD-MM-YYYY
+        r'\b\d{1,2}(?:st|nd|rd|th)?\s+week of the month\b', # e.g., 2nd week of the month
+        r'\b(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b' # just a day of the week
+    ]
 
-for var in comparison_variables:
-    uat_col = f"{var}_uat"
-    prod_col = f"{var}_prod"
-    pct_diff_col = f"{var}_percentage_difference"
-    outlier_col = f"{var}_outlier_dbscan"
+    # Combine all found patterns and the full email body as potential strings to parse
+    potential_date_strings = []
+    potential_date_strings.append(email_body) # Always try to parse the whole body
+    for pattern in date_patterns:
+        matches = re.findall(pattern, email_body, re.IGNORECASE)
+        potential_date_strings.extend(matches)
 
-    # Create percentage difference column
-    merged_df[pct_diff_col] = None
+    # Use a set to avoid processing duplicate strings
+    for s in set(potential_date_strings):
+        s = s.strip()
+        if not s:
+            continue
 
-    # Identify rows present in both
-    both_files_mask = merged_df['_merge'] == 'both'
+        try:
+            # Try to parse the string.
+            # default=current_time_for_default ensures relative dates are based on "now".
+            parsed_date = parse(s, fuzzy=True, default=current_time_for_default)
 
-    # Calculate percentage difference where both values are non-zero
-    non_zero_mask = both_files_mask & (merged_df[uat_col] != 0) & (merged_df[prod_col] != 0)
-    merged_df.loc[non_zero_mask & (merged_df[uat_col] != merged_df[prod_col]), pct_diff_col] = (
-        abs(merged_df[uat_col] - merged_df[prod_col]) / ((abs(merged_df[uat_col]) + abs(merged_df[prod_col])) / 2)
-    ) * 100
+            # --- Filtering Logic ---
+            # 1. Avoid parsing just numbers or short non-date words as dates
+            # If the string is too short or doesn't contain common date keywords
+            # and the parsed date is identical to the default time (meaning no change occurred),
+            # it's likely a false positive.
+            lower_s = s.lower()
+            is_likely_date_term = any(term in lower_s for term in ["next", "last", "this", "end", "beginning", "week", "month", "year", "day", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "tomorrow", "yesterday", "today", "pm", "am", "o'clock", "deadline"])
 
-    # Add comments for mismatches
-    merged_df.loc[both_files_mask & (merged_df[uat_col] != merged_df[prod_col]), 'comment'] += f'{var} mismatch, '
-    merged_df.loc[both_files_mask & pd.isna(merged_df[uat_col]) & ~pd.isna(merged_df[prod_col]), 'comment'] += f'{var} missing in UAT, '
-    merged_df.loc[both_files_mask & ~pd.isna(merged_df[uat_col]) & pd.isna(merged_df[prod_col]), 'comment'] += f'{var} missing in PROD, '
+            # Heuristic: If it parsed to the default datetime object (i.e., nothing specific found)
+            # AND it doesn't contain common date terms, it's probably not a real date.
+            # Also, check if the string contains digits if it's not a direct keyword like 'tomorrow'.
+            if (parsed_date == current_time_for_default and not is_likely_date_term) or \
+               (not re.search(r'\d', s) and not is_likely_date_term):
+                continue # Skip if it didn't really parse a date or it's a false positive
 
-    # Apply DBSCAN if there are percentage differences
-    pct_diff_for_dbscan = merged_df[both_files_mask & ~merged_df[pct_diff_col].isna()][pct_diff_col].values.reshape(-1, 1)
+            # Avoid adding duplicate dates (ignoring time components for practical purposes if not specified)
+            # You might adjust this if time precision is critical for duplicates.
+            date_only_str = parsed_date.strftime("%Y-%m-%d")
+            if date_only_str not in seen_dates_str:
+                extracted_dates.append(parsed_date)
+                seen_dates_str.add(date_only_str)
 
-    if pct_diff_for_dbscan.shape[0] >= 2:
-        dbscan = DBSCAN(eps=0.5, min_samples=2)  # Adjust eps and min_samples as needed for percentage differences
-        clusters = dbscan.fit_predict(pct_diff_for_dbscan)
+        except ValueError:
+            pass # Not a parsable date string
+        except OverflowError:
+            pass # Occurs with very large numbers
+        except Exception as e:
+            # print(f"General error parsing '{s}': {e}") # Debugging
+            pass
 
-        # Create a temporary DataFrame to align DBSCAN results
-        temp_dbscan_df = merged_df[both_files_mask & ~merged_df[pct_diff_col].isna()].copy()
-        temp_dbscan_df[outlier_col] = np.where(clusters == -1, 'Outlier', 'Not Outlier')
-
-        # Merge outlier labels back into the main DataFrame
-        merged_df = pd.merge(merged_df,
-                                 temp_dbscan_df[key_columns + [outlier_col]],
-                                 on=key_columns,
-                                 how='left')
-        merged_df[outlier_col] = merged_df[outlier_col].fillna('Not Applicable')
-    else:
-        merged_df[outlier_col] = 'Not Applicable'
-        print(f"Not enough percentage differences found for {var} to apply DBSCAN.")
-
-    # For rows with mismatch but zero in either UAT or PROD, mark as excluded
-    zero_mismatch_mask = merged_df[
-        (merged_df['comment'].str.contains(f'{var} mismatch')) &
-        ((merged_df[uat_col] == 0) | (merged_df[prod_col] == 0))
-    ].index
-    merged_df.loc[zero_mismatch_mask, outlier_col] = 'Excluded'
-
-# Identify rows missing in UAT/PROD and add to comment
-missing_in_uat_mask = merged_df['_merge'] == 'right_only'
-merged_df.loc[missing_in_uat_mask, 'comment'] += 'Missing row in UAT'
-
-missing_in_prod_mask = merged_df['_merge'] == 'left_only'
-merged_df.loc[missing_in_prod_mask, 'comment'] += 'Missing row in PROD'
-
-# Clean up the comment column (remove trailing ', ')
-merged_df['comment'] = merged_df['comment'].str.rstrip(', ')
-
-# Print the merged DataFrame with the comparison results
-output_columns = key_columns + [f'{var}_uat' for var in comparison_variables] + [f'{var}_prod' for var in comparison_variables] + [f'{var}_percentage_difference' for var in comparison_variables] + ['comment'] + [f'{var}_outlier_dbscan' for var in comparison_variables]
-print(merged_df[output_columns])
-
-# If you want to save this to a new Excel file:
-# merged_df.to_excel("comparison_with_pct_outliers.xlsx", index=False)
+    # Sort the dates for consistent output
+    return sorted(extracted_dates)
