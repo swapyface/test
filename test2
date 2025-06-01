@@ -1,86 +1,152 @@
-import pandas as pd
-from sklearn.cluster import DBSCAN
-import numpy as np
+import re
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta, SU, MO, TU, WE, TH, FR, SA
 
-# Assuming you have your two DataFrames loaded as df_uat and df_prod
-# and you have defined key_columns
+def extract_due_date(text: str) -> date | None:
+    """
+    Extracts a specific due date from a given text based on key phrases.
 
-# Example of multiple comparison variables
-comparison_variables = ["price", "quantity", "discount_percent"]
+    Args:
+        text: The input string (e.g., an email body).
 
-# Merge the DataFrames
-merged_df = pd.merge(df_uat, df_prod, on=key_columns, suffixes=('_uat', '_prod'), how='outer')
+    Returns:
+        A datetime.date object if a recognized phrase is found, otherwise None.
+    """
+    today = date.today()
+    text_lower = text.lower()
 
-# Initialize comment column
-merged_df['comment'] = ''
+    # --- Define patterns and their corresponding date calculation logic ---
+    # The order matters: more specific patterns should come before general ones.
 
-# Dictionary to store DBSCAN outlier results for each variable
-dbscan_results = {}
+    # Pattern for "tomorrow"
+    if re.search(r'tomorrow', text_lower):
+        return today + timedelta(days=1)
 
-for var in comparison_variables:
-    uat_col = f"{var}_uat"
-    prod_col = f"{var}_prod"
-    diff_col = f"{var}_difference"
-    outlier_col = f"{var}_outlier_dbscan"
+    # Pattern for "[N]th week of the month" (e.g., "2nd week of the month", "3rd week")
+    # This regex captures the number (1st, 2nd, 3rd, 4th, 5th) and ensures it's followed by "week" and "month" (optional)
+    nth_week_match = re.search(r'(\d+)(st|nd|rd|th)\s+week(?:\s+of the month)?', text_lower)
+    if nth_week_match:
+        ordinal_num_str = nth_week_match.group(1)
+        try:
+            week_number = int(ordinal_num_str)
+            if 1 <= week_number <= 5: # Limit to realistic week numbers (1st to 5th)
+                # Calculate the first day of the current month
+                first_day_of_month = date(today.year, today.month, 1)
+                
+                # Calculate the start of the Nth week.
+                # Assuming weeks start on Monday (ISO standard), get the first Monday of the month.
+                # If the 1st of the month is a Monday, then that's the start of week 1.
+                # Otherwise, find the first Monday after the 1st.
+                
+                # Find the first Monday of the current month
+                first_monday = first_day_of_month + relativedelta(weekday=MO(1))
 
-    # Create difference column
-    merged_df[diff_col] = None
+                # Calculate the start of the target week.
+                # Each week starts 7 days after the previous one.
+                # So, for the 2nd week, it's first_monday + 7 days.
+                # For the Nth week, it's first_monday + (N-1) * 7 days.
+                calculated_date = first_monday + timedelta(weeks=(week_number - 1))
+                
+                # Add a sanity check: Ensure the calculated date is still within the current month.
+                # If the calculated date spills into the next month, it means the Nth week
+                # (as defined by "first Monday of the month + (N-1) weeks") doesn't fully exist
+                # in the current month in a meaningful way for this interpretation.
+                # However, for phrases like "2nd week of the month", the expectation is usually
+                # to get a date *within* that week in the current month.
+                # For simplicity, we'll return the calculated_date, as it aligns with the start
+                # of the Nth ISO week *relative to the beginning of the month*.
+                # More robust parsing might involve checking which day of the week the user implies.
+                # For now, returning the Monday of that week is a reasonable default.
 
-    # Identify rows present in both
-    both_files_mask = merged_df['_merge'] == 'both'
+                # A common interpretation for "2nd week of the month" often means the Monday of that week.
+                return calculated_date
+            
+        except ValueError:
+            pass # Not a valid number, continue to other patterns
 
-    # Calculate difference where both values are present
-    both_present_mask = both_files_mask & ~pd.isna(merged_df[uat_col]) & ~pd.isna(merged_df[prod_col])
-    merged_df.loc[both_present_mask & (merged_df[uat_col] != merged_df[prod_col]), diff_col] = abs(merged_df[uat_col] - merged_df[prod_col])
+    # Pattern for "next [weekday]" (e.g., "next Sunday", "next Monday")
+    next_weekday_match = re.search(r'next\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)', text_lower)
+    if next_weekday_match:
+        weekday_str = next_weekday_match.group(1)
+        weekday_map = {
+            "sunday": SU, "monday": MO, "tuesday": TU, "wednesday": WE,
+            "thursday": TH, "friday": FR, "saturday": SA
+        }
+        target_weekday_obj = weekday_map[weekday_str]
+        
+        calculated_date = today + relativedelta(weekday=target_weekday_obj(+1))
+        
+        if calculated_date == today:
+            calculated_date += timedelta(days=7)
+        return calculated_date
 
-    # Add comments for mismatches
-    merged_df.loc[both_present_mask & (merged_df[uat_col] != merged_df[prod_col]), 'comment'] += f'{var} mismatch, '
-    merged_df.loc[both_present_mask & pd.isna(merged_df[uat_col]) & ~pd.isna(merged_df[prod_col]), 'comment'] += f'{var} missing in UAT, '
-    merged_df.loc[both_present_mask & ~pd.isna(merged_df[uat_col]) & pd.isna(merged_df[prod_col]), 'comment'] += f'{var} missing in PROD, '
+    # Pattern for "Next Month end" or "end of next month"
+    if re.search(r'(next month end|end of next month)', text_lower):
+        end_of_next_month = date(today.year, today.month, 1) + relativedelta(months=2) - timedelta(days=1)
+        return end_of_next_month
 
-    # Apply DBSCAN if there are mismatches (excluding zeros)
-    mismatch_df_for_dbscan = merged_df[
-        (merged_df['comment'].str.contains(f'{var} mismatch')) &
-        (merged_df[uat_col] != 0) &
-        (merged_df[prod_col] != 0) &
-        (~merged_df[diff_col].isna())
-    ].copy()
+    # Pattern for "Month end" or "end of the month" (referring to the current month)
+    elif re.search(r'(month end|end of the month)', text_lower):
+        end_of_current_month = date(today.year, today.month, 1) + relativedelta(months=1) - timedelta(days=1)
+        return end_of_current_month
+        
+    # Pattern for "end of the day" (implies today)
+    elif re.search(r'end of the day', text_lower):
+        return today
+        
+    # If no recognized date phrases are found, return None
+    return None
 
-    if not mismatch_df_for_dbscan.empty:
-        diff_array = mismatch_df_for_dbscan[diff_col].values.reshape(-1, 1)
-        dbscan = DBSCAN(eps=0.5, min_samples=2)  # Adjust eps and min_samples as needed
-        clusters = dbscan.fit_predict(diff_array)
-        mismatch_df_for_dbscan[outlier_col] = np.where(clusters == -1, 'Outlier', 'Not Outlier')
+# --- Example Usage ---
+if __name__ == "__main__":
+    print(f"Assuming today is: {date.today().strftime('%Y-%m-%d, %A')}\n")
 
-        # Merge outlier labels back
-        merged_df = pd.merge(merged_df,
-                                 mismatch_df_for_dbscan[key_columns + [outlier_col]],
-                                 on=key_columns,
-                                 how='left')
-        merged_df[outlier_col] = merged_df[outlier_col].fillna('Not Applicable')
-    else:
-        merged_df[outlier_col] = 'Not Applicable'
-        print(f"No suitable {var} mismatches found for DBSCAN.")
+    email_samples = [
+        "Please send me the quarterly report by next Sunday.",
+        "Can you get the slides ready for next Monday?",
+        "Hi, I need the final presentation before the Next Month end.",
+        "All team members must submit their logs by Month end.",
+        "Could you forward me the details by the 2nd week of the month?", # New test case
+        "The deadline is the end of next month.",
+        "Submit your timesheet by end of the month, please.",
+        "Let's meet next Friday.",
+        "This is just a regular email with no specific due date.",
+        "We need this by tomorrow.",
+        "Could you provide the data by the 1st week?", # Test without "of the month"
+        "Finish this by the 3rd week of the month.",
+        "Project due 5th week of the month.", # Test for 5th week
+    ]
 
-    # Label as 'Excluded' if the variable is 0 in either environment for a mismatch
-    zero_mismatch_mask = merged_df[
-        (merged_df['comment'].str.contains(f'{var} mismatch')) &
-        ((merged_df[uat_col] == 0) | (merged_df[prod_col] == 0))
-    ].index
-    merged_df.loc[zero_mismatch_mask, outlier_col] = 'Excluded'
+    for i, email_body in enumerate(email_samples):
+        extracted_date = extract_due_date(email_body)
+        print(f"📧 Email {i+1}: \"{email_body}\"")
+        if extracted_date:
+            formatted_date = extracted_date.strftime("%Y-%m-%d, %A")
+            print(f"   -> 🎯 Extracted Due Date: {formatted_date}\n")
+        else:
+            print("   -> ❌ No specific due date phrase found by current rules.\n")
 
-# Identify rows missing in UAT/PROD and add to comment
-missing_in_uat_mask = merged_df['_merge'] == 'right_only'
-merged_df.loc[missing_in_uat_mask, 'comment'] += 'Missing row in UAT'
+    print("--- Specific Test Cases (run these on different days or mock today's date) ---")
+    test_case_1 = "send me report by next Sunday"
+    print(f"Input: \"{test_case_1}\" -> Output: {extract_due_date(test_case_1)}")
 
-missing_in_prod_mask = merged_df['_merge'] == 'left_only'
-merged_df.loc[missing_in_prod_mask, 'comment'] += 'Missing row in PROD'
+    test_case_2 = "send me report by Next Month end"
+    print(f"Input: \"{test_case_2}\" -> Output: {extract_due_date(test_case_2)}")
 
-# Clean up the comment column (remove trailing ', ')
-merged_df['comment'] = merged_df['comment'].str.rstrip(', ')
+    test_case_3 = "send me report by Month end"
+    print(f"Input: \"{test_case_3}\" -> Output: {extract_due_date(test_case_3)}")
+    
+    test_case_4 = "send me report by end of the day"
+    print(f"Input: \"{test_case_4}\" -> Output: {extract_due_date(test_case_4)}")
 
-# Print the merged DataFrame with the comparison results
-print(merged_df[key_columns + [f'{var}_uat' for var in comparison_variables] + [f'{var}_prod' for var in comparison_variables] + [f'{var}_difference' for var in comparison_variables] + ['comment'] + [f'{var}_outlier_dbscan' for var in comparison_variables]])
+    test_case_5 = "send me report by end of next month"
+    print(f"Input: \"{test_case_5}\" -> Output: {extract_due_date(test_case_5)}")
 
-# If you want to save this to a new Excel file:
-# merged_df.to_excel("comparison_with_multi_outliers.xlsx", index=False)
+    test_case_6 = "I need this by tomorrow morning"
+    print(f"Input: \"{test_case_6}\" -> Output: {extract_due_date(test_case_6)}")
+
+    test_case_7 = "Please provide updates by the 2nd week of the month."
+    print(f"Input: \"{test_case_7}\" -> Output: {extract_due_date(test_case_7)}")
+
+    test_case_8 = "Final review by 4th week."
+    print(f"Input: \"{test_case_8}\" -> Output: {extract_due_date(test_case_8)}")
