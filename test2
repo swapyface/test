@@ -1,152 +1,226 @@
+import spacy
 import re
-from datetime import date, timedelta
-from dateutil.relativedelta import relativedelta, SU, MO, TU, WE, TH, FR, SA
+from datetime import datetime, timedelta
+from dateparser import parse as date_parse
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.compose import ColumnTransformer
 
-def extract_due_date(text: str) -> date | None:
-    """
-    Extracts a specific due date from a given text based on key phrases.
+# --- 1. Load spaCy model ---
+nlp = spacy.load("en_core_web_sm")
 
-    Args:
-        text: The input string (e.g., an email body).
+# --- 2. Synthetic Data (Replace with your actual labeled data) ---
+# In a real scenario, you'd load this from a CSV, JSON, or database
+# Note: 'action_date' is for verification during extraction, not directly for ML classification
+# The ML model will classify 'is_action_item' based on other features.
+# The date will be extracted post-classification.
 
-    Returns:
-        A datetime.date object if a recognized phrase is found, otherwise None.
-    """
-    today = date.today()
-    text_lower = text.lower()
+current_date = datetime(2025, 6, 12) # For relative date parsing
 
-    # --- Define patterns and their corresponding date calculation logic ---
-    # The order matters: more specific patterns should come before general ones.
+labeled_data = [
+    {"text": "Please finalize the report by next Tuesday.", "is_action_item": 1, "action_date": "2025-06-17"},
+    {"text": "Hope you are doing well.", "is_action_item": 0, "action_date": None},
+    {"text": "- Draft the presentation for Friday's meeting.", "is_action_item": 1, "action_date": "2025-06-13"},
+    {"text": "I will send the meeting minutes by EOD.", "is_action_item": 1, "action_date": "2025-06-12"},
+    {"text": "Meeting scheduled for 06/20/2025.", "is_action_item": 0, "action_date": "2025-06-20"}, # Not an action, just an info
+    {"text": "Confirm attendance for the workshop on July 5.", "is_action_item": 1, "action_date": "2025-07-05"},
+    {"text": "This is a general update regarding the project.", "is_action_item": 0, "action_date": None},
+    {"text": "We need to follow up on the client's request.", "is_action_item": 1, "action_date": None}, # No specific date mentioned in sentence
+    {"text": "Let's review the budget proposal ASAP.", "is_action_item": 1, "action_date": None},
+    {"text": "Could you please review the attached document?", "is_action_item": 1, "action_date": None},
+    {"text": "Attached is the Q2 financial report.", "is_action_item": 0, "action_date": None},
+    {"text": "Ensure all documents are signed by Monday.", "is_action_item": 1, "action_date": "2025-06-16"},
+    {"text": "The project will be completed by the end of next month.", "is_action_item": 0, "action_date": "2025-07-31"}, # Passive voice, less likely an direct action item for reader
+    {"text": "Thanks for your help!", "is_action_item": 0, "action_date": None},
+    {"text": "Please provide feedback on the draft.", "is_action_item": 1, "action_date": None},
+]
 
-    # Pattern for "tomorrow"
-    if re.search(r'tomorrow', text_lower):
-        return today + timedelta(days=1)
+df = pd.DataFrame(labeled_data)
 
-    # Pattern for "[N]th week of the month" (e.g., "2nd week of the month", "3rd week")
-    # This regex captures the number (1st, 2nd, 3rd, 4th, 5th) and ensures it's followed by "week" and "month" (optional)
-    nth_week_match = re.search(r'(\d+)(st|nd|rd|th)\s+week(?:\s+of the month)?', text_lower)
-    if nth_week_match:
-        ordinal_num_str = nth_week_match.group(1)
-        try:
-            week_number = int(ordinal_num_str)
-            if 1 <= week_number <= 5: # Limit to realistic week numbers (1st to 5th)
-                # Calculate the first day of the current month
-                first_day_of_month = date(today.year, today.month, 1)
-                
-                # Calculate the start of the Nth week.
-                # Assuming weeks start on Monday (ISO standard), get the first Monday of the month.
-                # If the 1st of the month is a Monday, then that's the start of week 1.
-                # Otherwise, find the first Monday after the 1st.
-                
-                # Find the first Monday of the current month
-                first_monday = first_day_of_month + relativedelta(weekday=MO(1))
+# --- 3. Feature Engineering Classes ---
 
-                # Calculate the start of the target week.
-                # Each week starts 7 days after the previous one.
-                # So, for the 2nd week, it's first_monday + 7 days.
-                # For the Nth week, it's first_monday + (N-1) * 7 days.
-                calculated_date = first_monday + timedelta(weeks=(week_number - 1))
-                
-                # Add a sanity check: Ensure the calculated date is still within the current month.
-                # If the calculated date spills into the next month, it means the Nth week
-                # (as defined by "first Monday of the month + (N-1) weeks") doesn't fully exist
-                # in the current month in a meaningful way for this interpretation.
-                # However, for phrases like "2nd week of the month", the expectation is usually
-                # to get a date *within* that week in the current month.
-                # For simplicity, we'll return the calculated_date, as it aligns with the start
-                # of the Nth ISO week *relative to the beginning of the month*.
-                # More robust parsing might involve checking which day of the week the user implies.
-                # For now, returning the Monday of that week is a reasonable default.
+class TextFeatures(BaseEstimator, TransformerMixin):
+    def __init__(self, nlp_model):
+        self.nlp = nlp_model
 
-                # A common interpretation for "2nd week of the month" often means the Monday of that week.
-                return calculated_date
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        features = []
+        for text in X:
+            doc = self.nlp(text)
             
-        except ValueError:
-            pass # Not a valid number, continue to other patterns
+            # Initialize feature dictionary
+            feats = {
+                'has_bullet_point': int(re.match(r'^\s*[-*•]\s*', text) is not None),
+                'starts_with_number_list': int(re.match(r'^\s*\d+\.\s*', text) is not None),
+                'has_imperative_verb_at_start': 0,
+                'has_should_must': int('should' in text.lower() or 'must' in text.lower()),
+                'has_verb': int(any(token.pos_ == 'VERB' for token in doc)),
+                'has_dobj': int(any(token.dep_ == 'dobj' for token in doc)),
+                'has_aux_modal': int(any(token.dep_ == 'aux' and token.tag_ == 'MD' for token in doc)), # e.g., 'will', 'can'
+                'line_length': len(text),
+                'ends_with_period': int(text.strip().endswith('.')),
+                'ends_with_question': int(text.strip().endswith('?'))
+            }
 
-    # Pattern for "next [weekday]" (e.g., "next Sunday", "next Monday")
-    next_weekday_match = re.search(r'next\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)', text_lower)
-    if next_weekday_match:
-        weekday_str = next_weekday_match.group(1)
-        weekday_map = {
-            "sunday": SU, "monday": MO, "tuesday": TU, "wednesday": WE,
-            "thursday": TH, "friday": FR, "saturday": SA
-        }
-        target_weekday_obj = weekday_map[weekday_str]
-        
-        calculated_date = today + relativedelta(weekday=target_weekday_obj(+1))
-        
-        if calculated_date == today:
-            calculated_date += timedelta(days=7)
-        return calculated_date
+            # Check for imperative verb at start (more sophisticated way)
+            if doc:
+                # Look for verbs that are typically imperative when at the start of a sentence
+                # VB: Verb, base form (e.g., go, give)
+                # VBP: Verb, non-3rd person singular present (e.g., eat, send)
+                # If the first non-punctuation, non-space token is a verb and not passive
+                first_meaningful_token = next((token for token in doc if not token.is_space and not token.is_punct), None)
+                if first_meaningful_token and first_meaningful_token.pos_ == 'VERB':
+                    # Avoid passive voice if possible, but simple check for now
+                    if not any(child.dep_ == 'auxpass' for child in first_meaningful_token.children):
+                         feats['has_imperative_verb_at_start'] = 1
 
-    # Pattern for "Next Month end" or "end of next month"
-    if re.search(r'(next month end|end of next month)', text_lower):
-        end_of_next_month = date(today.year, today.month, 1) + relativedelta(months=2) - timedelta(days=1)
-        return end_of_next_month
+            features.append(feats)
+        return pd.DataFrame(features)
 
-    # Pattern for "Month end" or "end of the month" (referring to the current month)
-    elif re.search(r'(month end|end of the month)', text_lower):
-        end_of_current_month = date(today.year, today.month, 1) + relativedelta(months=1) - timedelta(days=1)
-        return end_of_current_month
-        
-    # Pattern for "end of the day" (implies today)
-    elif re.search(r'end of the day', text_lower):
-        return today
-        
-    # If no recognized date phrases are found, return None
+class DatePresenceTransformer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        has_date_list = []
+        for text in X:
+            # A simple check for date presence. Full parsing happens later.
+            try:
+                parsed_date = date_parse(text, settings={'RELATIVE_BASE': current_date})
+                has_date_list.append(int(parsed_date is not None))
+            except:
+                has_date_list.append(0)
+        return pd.DataFrame({'has_date': has_date_list})
+
+
+# --- 4. Define Preprocessing and ML Pipeline ---
+
+# We need to handle text features and potentially other numerical features.
+# For text classification, we can use TF-IDF or just rely on the engineered features.
+# Let's combine custom features with a simple TF-IDF on the raw text to capture more nuance.
+
+# Features from TextFeatures class
+text_feat_extractor = Pipeline([
+    ('text_feats', TextFeatures(nlp)),
+])
+
+# Feature for date presence
+date_presence_extractor = Pipeline([
+    ('date_presence', DatePresenceTransformer()),
+])
+
+# Combine all features before classification
+feature_union = FeatureUnion([
+    ('nlp_features', text_feat_extractor),
+    ('date_features', date_presence_extractor),
+    # TF-IDF on raw text - this captures word importance without specific keywords
+    ('tfidf', TfidfVectorizer(max_features=500, stop_words='english',
+                              ngram_range=(1,2))) # Use ngrams for phrases
+])
+
+
+pipeline = Pipeline([
+    ('features', feature_union),
+    ('classifier', LogisticRegression(random_state=42, solver='liblinear')) # Robust for smaller datasets
+])
+
+
+# --- 5. Train the Model ---
+
+X = df['text']
+y = df['is_action_item']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+print("Training model...")
+pipeline.fit(X_train, y_train)
+print(f"Model trained. Accuracy on test set: {pipeline.score(X_test, y_test):.2f}")
+
+# --- 6. Function to Extract Dates from a Text Line (Post-Classification) ---
+
+def extract_action_date(text_line):
+    """
+    Attempts to parse a date from a given text line.
+    Uses dateparser for robustness, with relative base date.
+    """
+    try:
+        # Use dateparser for robust date extraction, considering "next Tuesday", "EOD", "tomorrow", etc.
+        # Set a current date for accurate relative date parsing
+        parsed_date = date_parse(text_line, settings={
+            'RELATIVE_BASE': current_date, # Use the fixed current_date for consistency
+            'RETURN_AS_TIMEZONE_AWARE': False, # Return naive datetime objects
+            'REQUIRE_PARTS': ['day', 'month'] # Require at least day and month
+        })
+        if parsed_date:
+            # Check if the parsed date is significantly in the past (e.g., more than a week)
+            # This helps to filter out historical dates in the context of action items
+            if (current_date - parsed_date).days > 7:
+                 return None # Likely a historical date, not an action date
+            return parsed_date.strftime('%Y-%m-%d')
+    except Exception as e:
+        # print(f"Error parsing date '{text_line}': {e}")
+        pass
     return None
 
+# --- 7. Apply to New Email Text ---
+
+def process_email_for_action_items(email_content):
+    lines = [line.strip() for line in email_content.split('\n') if line.strip()]
+    action_items_found = []
+
+    # Predict which lines are action items
+    predictions = pipeline.predict(lines)
+
+    for i, line in enumerate(lines):
+        if predictions[i] == 1: # If the model predicts it's an action item
+            # Try to extract date from the line itself
+            action_date = extract_action_date(line)
+
+            # If no date found in the line, check adjacent lines
+            if action_date is None:
+                # Check next line
+                if i + 1 < len(lines):
+                    action_date = extract_action_date(lines[i+1])
+                # Check previous line (optional, might be less common for action dates)
+                # if action_date is None and i - 1 >= 0:
+                #     action_date = extract_action_date(lines[i-1])
+
+            action_items_found.append({
+                'action_item': line,
+                'action_date': action_date
+            })
+    return action_items_found
+
 # --- Example Usage ---
-if __name__ == "__main__":
-    print(f"Assuming today is: {date.today().strftime('%Y-%m-%d, %A')}\n")
+test_email = """
+Hi Team,
 
-    email_samples = [
-        "Please send me the quarterly report by next Sunday.",
-        "Can you get the slides ready for next Monday?",
-        "Hi, I need the final presentation before the Next Month end.",
-        "All team members must submit their logs by Month end.",
-        "Could you forward me the details by the 2nd week of the month?", # New test case
-        "The deadline is the end of next month.",
-        "Submit your timesheet by end of the month, please.",
-        "Let's meet next Friday.",
-        "This is just a regular email with no specific due date.",
-        "We need this by tomorrow.",
-        "Could you provide the data by the 1st week?", # Test without "of the month"
-        "Finish this by the 3rd week of the month.",
-        "Project due 5th week of the month.", # Test for 5th week
-    ]
+Just a quick update:
+- Project Alpha kick-off meeting next Wednesday.
+- Finalize the budget report. Due by Friday.
+- Please confirm your availability for the workshop on June 25, 2025.
+- We should aim to complete the client presentation by July 10.
+This is a general announcement.
+I'm looking forward to hearing from you.
 
-    for i, email_body in enumerate(email_samples):
-        extracted_date = extract_due_date(email_body)
-        print(f"📧 Email {i+1}: \"{email_body}\"")
-        if extracted_date:
-            formatted_date = extracted_date.strftime("%Y-%m-%d, %A")
-            print(f"   -> 🎯 Extracted Due Date: {formatted_date}\n")
-        else:
-            print("   -> ❌ No specific due date phrase found by current rules.\n")
+Regards,
+Alice
+"""
 
-    print("--- Specific Test Cases (run these on different days or mock today's date) ---")
-    test_case_1 = "send me report by next Sunday"
-    print(f"Input: \"{test_case_1}\" -> Output: {extract_due_date(test_case_1)}")
+print("\n--- Processing Test Email ---")
+identified_actions = process_email_for_action_items(test_email)
 
-    test_case_2 = "send me report by Next Month end"
-    print(f"Input: \"{test_case_2}\" -> Output: {extract_due_date(test_case_2)}")
+if identified_actions:
+    for item in identified_actions:
+        print(f"Action: '{item['action_item']}' | Date: {item['action_date']}")
+else:
+    print("No action items identified.")
 
-    test_case_3 = "send me report by Month end"
-    print(f"Input: \"{test_case_3}\" -> Output: {extract_due_date(test_case_3)}")
-    
-    test_case_4 = "send me report by end of the day"
-    print(f"Input: \"{test_case_4}\" -> Output: {extract_due_date(test_case_4)}")
-
-    test_case_5 = "send me report by end of next month"
-    print(f"Input: \"{test_case_5}\" -> Output: {extract_due_date(test_case_5)}")
-
-    test_case_6 = "I need this by tomorrow morning"
-    print(f"Input: \"{test_case_6}\" -> Output: {extract_due_date(test_case_6)}")
-
-    test_case_7 = "Please provide updates by the 2nd week of the month."
-    print(f"Input: \"{test_case_7}\" -> Output: {extract_due_date(test_case_7)}")
-
-    test_case_8 = "Final review by 4th week."
-    print(f"Input: \"{test_case_8}\" -> Output: {extract_due_date(test_case_8)}")
