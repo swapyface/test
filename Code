@@ -1,87 +1,100 @@
-from datetime import datetime
-from dateutil.parser import parse
-from dateutil.relativedelta import relativedelta
-import re # For regular expressions to help find date-like patterns
+Review the attached Q3 budget proposal by Friday.
 
-def extract_dates_from_email(email_body):
-    """
-    Extracts dates from an email body, handling various natural language formats.
-    Attempts to be more robust by looking for common date patterns.
+Approve the new hire requisition for the Senior Backend Engineer role.
 
-    Args:
-        email_body (str): The text content of the email.
+Schedule a meeting with the Head of Product to discuss feature prioritization.
 
-    Returns:
-        list: A list of datetime objects found in the email body.
-              Returns an empty list if no dates are found or can be parsed.
-    """
-    extracted_dates = []
-    seen_dates_str = set()
-    current_time_for_default = datetime.now() # Use this as the base for relative dates
+Provide feedback on John Doe's performance review document.
 
-    # Define a list of common date-related patterns to search for
-    # These patterns help guide dateutil by giving it smaller, more relevant chunks.
-    # This is not exhaustive but covers common cases.
-    date_patterns = [
-        r'\b(?:next|last|this)\s+(?:(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day|week|month|year)\b',
-        r'\bend of (?:next|this|the) month\b',
-        r'\bbeginning of (?:next|this|the) month\b',
-        r'\b(?:tomorrow|yesterday|today)\b',
-        r'\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b', # e.g., 25th Dec 2024
-        r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?\b', # e.g., Dec 25, 2024 or June 20
-        r'\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b', # YYYY-MM-DD or YYYY/MM/DD
-        r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b', # MM-DD-YY or DD-MM-YYYY
-        r'\b\d{1,2}(?:st|nd|rd|th)?\s+week of the month\b', # e.g., 2nd week of the month
-        r'\b(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b' # just a day of the week
-    ]
+Confirm your attendance for the leadership offsite next month.
 
-    # Combine all found patterns and the full email body as potential strings to parse
-    potential_date_strings = []
-    potential_date_strings.append(email_body) # Always try to parse the whole body
-    for pattern in date_patterns:
-        matches = re.findall(pattern, email_body, re.IGNORECASE)
-        potential_date_strings.extend(matches)
+Send the revised project timeline to all stakeholders.
 
-    # Use a set to avoid processing duplicate strings
-    for s in set(potential_date_strings):
-        s = s.strip()
-        if not s:
-            continue
+Delegate the infrastructure upgrade task to Team Alpha.
 
-        try:
-            # Try to parse the string.
-            # default=current_time_for_default ensures relative dates are based on "now".
-            parsed_date = parse(s, fuzzy=True, default=current_time_for_default)
+Prepare a presentation on our AI strategy for the executive board.
 
-            # --- Filtering Logic ---
-            # 1. Avoid parsing just numbers or short non-date words as dates
-            # If the string is too short or doesn't contain common date keywords
-            # and the parsed date is identical to the default time (meaning no change occurred),
-            # it's likely a false positive.
-            lower_s = s.lower()
-            is_likely_date_term = any(term in lower_s for term in ["next", "last", "this", "end", "beginning", "week", "month", "year", "day", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "tomorrow", "yesterday", "today", "pm", "am", "o'clock", "deadline"])
+Resolve the dependency issue between Microservice A and Microservice B.
 
-            # Heuristic: If it parsed to the default datetime object (i.e., nothing specific found)
-            # AND it doesn't contain common date terms, it's probably not a real date.
-            # Also, check if the string contains digits if it's not a direct keyword like 'tomorrow'.
-            if (parsed_date == current_time_for_default and not is_likely_date_term) or \
-               (not re.search(r'\d', s) and not is_likely_date_term):
-                continue # Skip if it didn't really parse a date or it's a false positive
+Interview Jane Smith for the Software Architect position on Tuesday.
 
-            # Avoid adding duplicate dates (ignoring time components for practical purposes if not specified)
-            # You might adjust this if time precision is critical for duplicates.
-            date_only_str = parsed_date.strftime("%Y-%m-%d")
-            if date_only_str not in seen_dates_str:
-                extracted_dates.append(parsed_date)
-                seen_dates_str.add(date_only_str)
+Sign off on the vendor contract for the new analytics tool.
 
-        except ValueError:
-            pass # Not a parsable date string
-        except OverflowError:
-            pass # Occurs with very large numbers
-        except Exception as e:
-            # print(f"General error parsing '{s}': {e}") # Debugging
-            pass
+Follow up with the sales team regarding the client demo request.
 
-    # Sort the dates for consistent output
-    return sorted(extracted_dates)
+Update the team on the status of the cloud migration.
+
+Approve the vacation request for Sarah Connor from July 1st to 10th.
+
+Send out the meeting minutes from yesterday's planning session.
+
+Create a report detailing the Q1 engineering metrics.
+
+Conduct a skip-level meeting with two engineers from Team Gamma.
+
+Address the security vulnerability reported in our authentication service.
+
+Evaluate the proposal from the new recruitment agency.
+
+Communicate the new policy on remote work to the entire department.
+
+Review the technical design for the new customer dashboard.
+
+Allocate 3 engineers to the urgent bug fix for the production issue.
+
+Provide a recommendation for the new database technology.
+
+Finalize the OKRs for the engineering department for the next quarter.
+
+Investigate the root cause of the recent system outage.
+
+Onboard the new Tech Lead for Team Delta next Monday.
+
+Draft a response to the customer complaint about system performance.
+
+Host a brainstorming session for the next generation product features.
+
+Ensure all team leads have completed their compliance training.
+
+Liaise with Legal on the data privacy requirements for the new feature.
+
+Submit the team's professional development budget request.
+
+Review and approve the new code review guidelines.
+
+Organize a cross-functional workshop on agile methodologies.
+
+Address the low employee morale reported by Team Epsilon.
+
+Confirm the timeline for the deprecation of the legacy system.
+
+Provide an estimate for the effort required for Feature Z.
+
+Initiate the search for a new DevOps specialist.
+
+Facilitate a discussion on technical debt reduction strategies.
+
+Generate a list of top performers for the upcoming bonus cycle.
+
+Request a review of the company's cybersecurity posture from the CISO.
+
+Develop a training program for junior engineers.
+
+Sign off on the procurement of new development hardware.
+
+Communicate best practices for code quality across teams.
+
+Provide guidance on scaling our microservices architecture.
+
+Validate the proposed solution for improving system latency.
+
+Set up a recurring one-on-one meeting with your direct reports.
+
+Review the quarterly patent submission ideas from the team.
+
+Ensure adherence to open-source licensing agreements.
+
+Prepare a contingency plan for potential server outages.
+
+Propose a new approach for managing technical documentation.
+
