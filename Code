@@ -1,15 +1,1 @@
-I've analyzed the performance and have identified the core reasons for this struggle:
 
-Ambiguity of Task Ownership: When an email is sent to a group of people, the model struggles to determine who, if anyone, is responsible for the task. A general request to a group (e.g., "Can someone send me the file?") is difficult to assign to a specific individual without understanding team roles and context.
-
-Limited Vocabulary from Our Data: The model's vocabulary is restricted to the data we've trained it on. We don't have a large enough dataset to cover all possible ways a task can be phrased. This means it often fails to recognize tasks that use synonyms, new jargon, or phrasing it hasn't encountered before.
-
-Lack of Personal Context: The model lacks the user-specific context needed for nuanced interpretation. It doesn't know, for example, that an email from a key client about "Project Alpha" is a high-priority task, while a similar email from a general mailing list is not.
-
-To address these challenges, I've outlined a plan with the following next steps:
-
-Expanding Vocabulary with Pre-trained Models (spaCy): To solve the limited vocabulary issue, we will integrate a powerful pre-trained NLP model like spaCy. This will immediately give our model a vast vocabulary and a semantic understanding of language, allowing it to recognize tasks much more reliably, even with unfamiliar phrasing.
-
-Enriching Features with User Context: We will begin incorporating more contextual signals to help with task ownership ambiguity. This includes analyzing the sender's relationship to the user, tracking project keywords, and identifying if the user was in the "To" or "CC" line.
-
-Implementing a User Feedback Loop: We will develop a simple mechanism for users to confirm or correct the model's suggestions. This will provide us with a continuous stream of high-quality data to improve the model's accuracy and personalization over time.
