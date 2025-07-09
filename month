@@ -1,0 +1,53 @@
+from datetime import datetime
+
+# List of known U.S. date formats (extendable)
+known_formats = [
+    "%B %d, %Y",        # July 8, 2025
+    "%b %d, %Y",        # Jul 8, 2025
+    "%m/%d/%Y",         # 07/08/2025
+    "%m-%d-%Y",         # 07-08-2025
+    "%m/%d/%y",         # 07/08/25
+    "%m-%d-%y",         # 07-08-25
+    "%Y-%m-%d",         # 2025-07-08
+    "%Y/%m/%d",         # 2025/07/08
+    "%b %d %Y",         # Jul 8 2025
+    "%B %d %Y",         # July 8 2025
+    "%d %B %Y",         # 8 July 2025
+    "%d %b %Y",         # 8 Jul 2025
+    "%d-%b-%Y",         # 8-Jul-2025
+    "%d-%B-%Y",         # 8-July-2025
+    "%d.%m.%Y",         # 7.8.2025
+    "%d/%m/%Y",         # 7/8/2025
+    "%m.%d.%Y",         # 07.08.2025
+    "%m.%d.%y",         # 07.08.25
+    "%A, %B %d, %Y",    # Tuesday, July 8, 2025
+    "%a, %B %d, %Y",    # Tue, July 8, 2025
+    "%A %B %d %Y",      # Tuesday July 8 2025
+]
+
+def convert_to_mmddyyyy(date_str):
+    for fmt in known_formats:
+        try:
+            dt = datetime.strptime(date_str.strip(), fmt)
+            return dt.strftime("%m/%d/%Y")
+        except ValueError:
+            continue
+    return f"Unrecognized format: {date_str}"
+
+# === Example usage ===
+test_dates = [
+    "July 8, 2025",
+    "Jul 8, 2025",
+    "07/08/2025",
+    "7-8-2025",
+    "Tuesday, July 8, 2025",
+    "Jul 8 2025",
+    "8 Jul 2025",
+    "8-July-2025",
+    "7.8.2025",
+    "07.08.25",
+    "8-Jul-2025"
+]
+
+for d in test_dates:
+    print(f"{d} → {convert_to_mmddyyyy(d)}")
