@@ -1,42 +1,57 @@
-import pandas as pd
-import numpy as np
+import re
+from datetime import datetime
 
-# Load the Excel files
-uat_df = pd.read_excel("uat.xlsx")
-prod_df = pd.read_excel("prod.xlsx")
+# List of known formats
+known_formats = [
+    "%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y",
+    "%B %d", "%b %d",
+    "%m/%d/%Y", "%m-%d-%Y", "%m/%d/%y", "%m-%d-%y",
+    "%Y-%m-%d", "%Y/%m/%d",
+    "%d %B %Y", "%d %b %Y", "%d-%b-%Y", "%d-%B-%Y",
+    "%d.%m.%Y", "%m.%d.%Y", "%m.%d.%y",
+    "%A, %B %d, %Y", "%a, %B %d, %Y", "%A %B %d %Y"
+]
 
-# Define key columns
-key_columns = ['id1', 'id2', 'category']
+def clean_date_string(date_str):
+    # Remove ordinal suffixes: 1st, 2nd, 3rd, 4th, etc.
+    date_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str, flags=re.IGNORECASE)
 
-# Merge on key columns
-merged_df = pd.merge(uat_df, prod_df, on=key_columns, suffixes=('_uat', '_prod'))
+    # Remove common phrases and time mentions
+    date_str = re.sub(r'\bat\b.*', '', date_str)                  # Remove 'at 3PM' etc.
+    date_str = re.sub(r'–.*', '', date_str)                       # Remove anything after en-dash
+    date_str = re.sub(r'-.*', '', date_str)                       # Remove anything after dash
+    date_str = re.sub(r'[^a-zA-Z0-9/,:\s]', '', date_str)         # Remove symbols like • or ~
+    date_str = re.sub(r'\s+', ' ', date_str).strip()              # Clean extra spaces
 
-# List to hold mismatches
-mismatches = []
+    return date_str
 
-# Columns to compare (non-key columns)
-compare_columns = [col for col in uat_df.columns if col not in key_columns]
+def convert_to_mmddyyyy(date_str):
+    cleaned = clean_date_string(date_str)
+    has_year = any(len(part) == 4 and part.isdigit() for part in cleaned.split())
+    for fmt in known_formats:
+        try:
+            dt = datetime.strptime(cleaned, fmt)
+            if not has_year:
+                dt = dt.replace(year=datetime.today().year)
+            return dt.strftime("%m/%d/%Y")
+        except ValueError:
+            continue
+    return f"Unrecognized format: {date_str}"
 
-for col in compare_columns:
-    uat_col = f"{col}_uat"
-    prod_col = f"{col}_prod"
+# === Test cases ===
+test_dates = [
+    "Jul 8",
+    "Jul 8 at 3PM",
+    "July 8 – block your calendar",
+    "8th July 2025",
+    "Tues, Jul 8th",
+    "8th of July",
+    "June 8, 2025",
+    "8th-July-2025",
+    "7/8/2025",
+    "2025-07-08",
+    "07.08.25"
+]
 
-    if uat_col in merged_df.columns and prod_col in merged_df.columns:
-        # Coerce both columns to string for clean comparison, also handle NaNs
-        uat_values = merged_df[uat_col].astype(str).fillna('nan')
-        prod_values = merged_df[prod_col].astype(str).fillna('nan')
-        
-        diff = uat_values != prod_values
-        mismatch_rows = merged_df[diff][key_columns + [uat_col, prod_col]]
-        
-        if not mismatch_rows.empty:
-            mismatch_rows['column_name'] = col
-            mismatches.append(mismatch_rows)
-
-# Combine mismatches
-if mismatches:
-    mismatch_df = pd.concat(mismatches, ignore_index=True)
-    mismatch_df.to_excel("mismatches.xlsx", index=False)
-    print("Mismatch report saved to 'mismatches.xlsx'")
-else:
-    print("No mismatches found.")
+for d in test_dates:
+    print(f"{d:<35} → {convert_to_mmddyyyy(d)}")
