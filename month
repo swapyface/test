@@ -1,40 +1,60 @@
+import spacy
+
+def is_task_for_reader(verb_token):
+    """
+    Analyzes the subject of a verb to determine if it's an actionable
+    task for the person reading the email.
+    """
+    subject = None
+    for child in verb_token.children:
+        if child.dep_ in ('nsubj', 'nsubjpass'):
+            subject = child
+            break
+
+    # Case 1: No subject found. This is an imperative command (e.g., "Prepare the slides.")
+    # This is a task for the reader.
+    if subject is None:
+        return True
+
+    # Case 2: The subject is "you". (e.g., "Can you prepare the slides?")
+    # This is a task for the reader.
+    if subject.text.lower() == 'you':
+        return True
+
+    # Case 3: The subject is a proper noun ("Andrew", "Sarah") or another pronoun ("I", "we", "he").
+    # This is informational, a task for someone else.
+    if subject.pos_ == 'PROPN' or (subject.pos_ == 'PRON' and subject.text.lower() != 'you'):
+        return False
+        
+    # Default to False if the pattern is not explicitly a task for the reader.
+    return False
+
+
 def extract_tasks_with_deadlines(text):
     """
-    Extracts actionable tasks and their associated deadlines from text.
-    Uses rules to filter for active, future-facing commands/requests.
+    Extracts actionable tasks for the reader and their associated deadlines.
     """
-    # Using a global nlp object is more efficient if calling this function in a loop
     doc = nlp(text)
     tasks = []
 
     for sent in doc.sents:
-        # --- Task Identification Logic ---
         root_verb = sent.root
+        
+        # Initial filter: must be a verb, not past tense, not passive.
         if root_verb.pos_ != 'VERB' or root_verb.tag_ == 'VBD':
             continue
-
-        is_passive = any(token.dep_ == 'auxpass' for token in root_verb.children)
-        if is_passive:
+        if any(token.dep_ == 'auxpass' for token in root_verb.children):
             continue
 
-        has_modal = any(token.tag_ == 'MD' for token in root_verb.children)
-        # Check for imperative by seeing if there's no subject
-        is_imperative = not any(token.dep_ in ('nsubj', 'nsubjpass') for token in root_verb.children)
-
-        # --- Deadline Extraction Logic ---
-        # A task is likely if it's a command (imperative) or has a modal verb ("should", "will", etc.)
-        if has_modal or is_imperative:
-            # A simple fix to avoid including the final punctuation in the task phrase
+        # *** NEW ACTOR-CHECKING LOGIC ***
+        if is_task_for_reader(root_verb):
             task_phrase = " ".join([token.text for token in root_verb.subtree if not token.is_punct])
-
-            # Find DATE or TIME entities within this same sentence
             deadlines = [ent.text for ent in sent.ents if ent.label_ in ["DATE", "TIME"]]
-
-            # Create a dictionary for the found task
+            
             task_info = {
                 "task": task_phrase,
                 "deadline": ", ".join(deadlines) if deadlines else None
             }
             tasks.append(task_info)
-
+            
     return tasks
