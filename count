@@ -1,181 +1,59 @@
-Project 1 : Our firm's portfolio managers and risk analysts were monitoring a vast portfolio of credit bonds. 
-The existing alert system, likely based on simple rules or older statistical models, was flagging too many non-threatening price or yield movements as potential anomalies.
-Risk analysts were spending a significant amount of time manually investigating these alerts, many of which turned out to be false positives.
-This inefficiency was costly in terms of man-hours and delayed the identification of genuine, high-risk anomalies, potentially exposing the company to financial loss.
-My goal was to develop a more accurate machine learning solution to autonomously detect anomalies in our credit risk data."
-The primary objectives were to increase the precision of the alerts sent to the analysts and significantly reduce the number of false positives, thereby improving the team's efficiency and focus.
+was responsible for building a scalable, auditable solution to map vendor instruments to internal instruments with very high precision, while also improving coverage and reducing manual stewardship. The solution needed to run at scale (millions of records), integrate into existing data pipelines, and provide traceability suitable for model governance and controls.
+
 Action
-This is where you Dive Deep into the specifics of financial data.
-•	Data Sources & Feature Engineering: "I worked with a complex dataset that included bond-specific attributes (yield, duration, credit ratings from Moody's/S&P), time-series market data (spreads, price history), and macroeconomic indicators. 
-•	I engineered features that captured the behavior of a bond, such as the rate of change of its credit spread relative to its industry benchmark."
-•	Model Selection: "Given the time-series nature of the data, I evaluated several models. I benchmarked traditional models like Isolation Forest against sequence-aware models like an LSTM Autoencoder. The LSTM Autoencoder ultimately performed better because it learned the normal 'behavioral pattern' of a bond's pricing and yield data over time, making it highly effective at spotting deviations."
-•	Defining 'Anomaly': "A key challenge was defining an 'anomaly.' I worked with senior risk analysts to label historical data, classifying events not just as anomalies but by type (e.g., liquidity issue, rating downgrade precursor, default risk). This helped train a more nuanced model."
-•	Validation & Backtesting: "I rigorously backtested the model against historical market data, including periods of high volatility like the start of the COVID-19 pandemic, to ensure its robustness. The primary metric was precision, as the main business goal was to deliver high-quality, actionable alerts to the analysts."
 
+I implemented a two-stage mapping pipeline using PySpark for large-scale ETL and feature engineering, and a Graph Neural Network (GNN) for graph-based entity resolution.
 
+1) PySpark ingestion, normalization, and deterministic mapping (baseline)
+	•	Built PySpark jobs to ingest daily vendor drops and reference/security master snapshots from the lake (S3/ADLS/HDFS depending on environment).
+	•	Standardized instrument attributes (issuer names, security descriptions, dates, coupon formats, currency codes, country codes).
+	•	Implemented deterministic joins first using high-trust keys:
+	•	ISIN/CUSIP/FIGI where available, plus validations (currency, product type, maturity sanity checks).
+	•	This baseline resolved a large chunk of records with near-zero operational risk and provided a clean “unmapped remainder” for ML.
+
+2) Candidate generation at scale (blocking) in PySpark
+	•	To avoid O(N²) comparisons, I used PySpark “blocking” to generate candidate pairs only when they were plausible:
+	•	Same product type + currency
+	•	Maturity within a configurable window (e.g., ±365 days for bonds; tenor alignment for CDS)
+	•	Issuer token match / LEI match when present
+	•	This reduced candidate pairs from billions to a manageable set (typically tens per instrument), enabling ML scoring to scale.
+
+3) Graph construction for identity resolution
+	•	Modeled the problem as an identity graph:
+	•	Nodes: VendorInstrument, RefInstrument, Identifier (ISIN/CUSIP/SEDOL/FIGI), and optionally Issuer/Entity
+	•	Edges: HAS_ID, ISSUED_BY, plus candidate edges
+	•	The key benefit was that the GNN could use graph structure (shared identifiers, issuer relationships, neighborhood consistency) to infer correct matches even when direct keys were missing.
+
+4) GNN link prediction for match scoring
+	•	Trained a link prediction model to estimate P(vendor ↔ ref match) on candidate edges:
+	•	Node features combined:
+	•	Text embeddings of instrument/issuer names (normalized descriptions)
+	•	Numeric features (coupon, maturity in days, issue date)
+	•	Categorical embeddings (currency, seniority, doc clause, region)
+	•	Used a relational/heterogeneous GNN architecture (e.g., R-GCN or HGT) to handle multiple node/edge types.
+	•	For training labels, I used:
+	•	Existing historical mapping tables and steward-approved links as positives
+	•	Hard negatives from “close but wrong” candidates (same issuer + similar maturity but different currency/seniority)
+
+5) Global consistency and safe decisioning
+	•	After scoring, I applied:
+	•	Hard constraints (currency/product type mismatch blocked)
+	•	A confidence thresholding policy:
+	•	High score → auto-link
+	•	Medium score → steward review queue
+	•	Low score → exception/no-link
+	•	To prevent duplicates and enforce consistency, I used a global selection step (maximum weight matching / capacity rules) so the system did not map multiple vendor instruments incorrectly to the same internal security unless explicitly allowed.
+
+6) Governance, explainability, and monitoring
+	•	Persisted a versioned mapping table with:
+	•	match_confidence, evidence flags (shared ID, issuer proximity), and model version
+	•	Monitored:
+	•	Precision in auto-link bucket
+	•	Coverage improvements
+	•	Downstream break rate (pricing/risk exceptions)
+	•	Data drift (issuer name changes, symbology churn)
 
 Result
-Connect your technical work directly to financial outcomes.
-•	Metrics: "The deployed LSTM model successfully increased anomaly precision by 15% and reduced false positives by 25%."
-•	Business Value: "This reduction in false alarms saved our credit analysis team an estimated 20-30 hours of work per week. More critically, it allowed them to identify two high-risk bonds that were showing early signs of distress three weeks before a public credit downgrade. This early warning enabled our portfolio managers to hedge the position, preventing a potential loss estimated at over $500,000." (Note: Use a real or realistic number if you can!)
-## 3. Prepare for Likely Follow-up Questions
-These questions will now be more finance-oriented.
-•	"How did your model differentiate between a genuine credit anomaly and extreme market-wide volatility?"
-•	"Explain the concept of an LSTM Autoencoder to a non-technical portfolio manager."
-•	"Credit ratings agencies already exist. How did your model provide value beyond what a Moody's or S&P rating gives you?"
-•	"How did you handle the 'black box' nature of a neural network? How did you build trust with the analysts who had to use your model's outputs?"
-o	Hint: Talk about using interpretability tools like SHAP or LIME to show which features were driving an anomalous prediction.
-•	"What other data sources would you have incorporated if you had access to them?"
-o	Hint: Suggest things like news sentiment analysis on bond issuers, transcripts of earnings calls, or alternative data.
-
-Describe the "before" state. What was the problem for the traders?
-•	Problem: Traders and portfolio managers needed instant access to Credit Default Swap (CDS) index data to make critical, time-sensitive decisions.
-•	Pain Point: The traditional method of retrieving this data involved navigating complex Bloomberg or Refinitiv terminals, using specific ticker codes and commands (e.g., CDX.NA.IG S5 3Y Corp). This process was slow, cumbersome, and required specialized training, creating a bottleneck.
-•	Business Impact: Delays in accessing data could lead to missed trading opportunities or delayed risk assessments. It also made it difficult for less experienced team members to get information quickly.
-Task
-What was your specific objective?
-•	"My role was to design and develop a proof-of-concept for a conversational AI chatbot that would serve as a natural language interface to our live market data feeds."
-•	"The primary goal was to empower traders to query complex CDS data—like live levels, spreads, and historical trends—simply by asking questions in plain English, dramatically reducing the time to insight."
-Action
-This is where you Dive Deep into your technical and design choices. Explain the architecture and the reasoning behind it.
-•	Architecture & Tech Stack: "I chose to build the chatbot using LangChain because it provided a robust framework for chaining LLM calls with other tools. I used the Azure OpenAI API for access to powerful models like GPT-4, which was critical for understanding the nuances of financial queries. The entire application was containerized using Docker for portability."
-•	Core Logic (LangChain Agents): "The key was creating a LangChain Agent. This agent was equipped with a custom 'tool' that I developed: a Python function that could directly query the Bloomberg/Refinitiv API. When a user asked a question like, 'What's the spread on the 5-year CDX investment grade index?', the LangChain agent knew to use my custom tool to fetch the live data."
-•	Prompt Engineering: "I spent significant time on prompt engineering. The master prompt instructed the LLM to act as an 'expert financial data assistant,' to identify the key entities in a user's query (e.g., index name, tenor, date range), and to format those entities into a structured API call for my tool."
-•	Data Handling: "Once the tool fetched the structured data (usually in JSON format) from the market data feed, it was passed back to the LLM. A final prompt instructed the LLM to synthesize this data into a clear, natural language response for the trader, for instance, 'The current spread for the 5-year CDX IG index is 52.5 basis points.'"
-Result
-Quantify the impact your chatbot had on the trading floor.
-•	Metrics: "In user acceptance testing, the chatbot reduced the average time to retrieve complex time-series data from over 2 minutes to under 15 seconds—a 90% improvement."
-•	Business Value: "The intuitive interface allowed traders to perform more ad-hoc analysis without breaking their workflow. We saw a 40% increase in data queries from junior traders, indicating we successfully democratized data access. The project was greenlit for further development, with plans to expand it to other asset classes like interest rate swaps and equity options."
- 
-## 2. Connect to Amazon's Leadership Principles (LPs)
-•	Customer Obsession: You started with the trader's workflow and pain points. You obsessed over making their data retrieval process faster and more intuitive.
-•	Invent and Simplify: You took a highly complex process (terminal commands) and simplified it into a simple, conversational interface. This is a perfect example of this LP.
-•	Dive Deep: Your explanation of the LangChain agent, the custom tool you built to wrap the API, and your prompt engineering efforts demonstrate your technical depth.
-•	Bias for Action: You didn't wait for a perfect, all-encompassing solution. You built a proof-of-concept to quickly demonstrate value and get user feedback, which is a classic example of this principle.
-•	Think Big: Your conclusion about "plans to expand it to other asset classes" shows you are thinking about the long-term, scalable vision of your solution, not just the initial problem.
- 
-## 3. Prepare for Likely Follow-up Questions
-Be ready to defend your technical choices and discuss the challenges.
-•	"Why did you use LangChain instead of just calling the Azure OpenAI API directly?"
-o	Hint: Talk about LangChain's value in abstracting away the boilerplate code for creating agents and chains, and how its "Tools" concept is perfect for integrating external APIs.
-•	"How did you handle ambiguous queries from traders?"
-o	Hint: Explain that you programmed the LLM to ask clarifying questions. For example, if a user asks for "the index," the bot would respond, "Which CDS index are you referring to? The Investment Grade (IG) or High Yield (HY)?"
-•	"What were the biggest security concerns, and how did you address them?"
-o	Hint: Discuss ensuring that the bot only had read-only access to data and couldn't execute trades. Mention data privacy and using Azure's secure infrastructure.
-•	"How do you ensure the data provided by the LLM is accurate and not a hallucination?"
-o	Hint: This is crucial. Explain that the LLM's role wasn't to know the data but to act as a reasoning engine to call the correct API. The data came directly from the trusted source (Bloomberg/Refinitiv), not the LLM's memory. The LLM's only job was to translate the user's request to an API call and the API's response back to the user.
-•	Problem: Our data science team was highly effective at building models, but we lacked a standardized process for deploying and managing them. Each project was a bespoke effort.
-•	Pain Point: This led to several issues:
-o	Inconsistent Data: Data scientists were writing their own, often duplicative, data cleaning and preprocessing scripts, leading to inconsistencies.
-o	Slow Deployment: Moving a model from a Jupyter notebook to a production environment was a manual, error-prone process that could take weeks.
-o	Lack of Reproducibility: It was difficult to retrain models with the exact same data and environment, which is a major governance and compliance risk.
-o	Wasted Effort: Engineers and data scientists were constantly reinventing the wheel for data ingestion, training, and tuning for each new project.
-Task
-What was your mandate to fix this systemic issue?
-•	"My task was to architect and implement a standardized, end-to-end MLOps framework that would serve as the backbone for all future machine learning projects."
-•	"The key objectives were to automate the entire lifecycle—from raw data ingestion to tuned model deployment—in order to ensure data quality, accelerate our development velocity, and enable scalable, reproducible model development."
-Action
-This is where you Dive Deep on the architecture. Be specific about the components you built and the technologies you used. Structure your answer by pipeline stages.
-•	1. ETL & Data Ingestion: "I designed the ETL pipeline using Apache Airflow to orchestrate daily batch jobs. These jobs ingested raw data from sources like S3 and relational databases, and I integrated Great Expectations as a crucial step for automated data validation. This ensured that any data quality issues (like schema changes or null values) were caught immediately, preventing 'garbage in, garbage out' for our models."
-•	2. Feature Store: "For preprocessing, instead of having individual scripts, I championed the development of a centralized Feature Store (you can mention a tool like Feast, or AWS SageMaker Feature Store, or say you built a custom one). This created a single source of truth for features, ensuring consistency and preventing feature drift across different models."
-•	3. Model Training & Tuning: "I containerized our training environments using Docker, which made our model training code portable and reproducible. The training itself was managed by an AWS SageMaker Pipeline. This pipeline automatically provisioned the necessary compute, ran the training script, and then executed a hyperparameter tuning job using SageMaker's built-in Bayesian optimization tuner to find the best model configuration."
-•	4. CI/CD for ML: "Finally, I integrated the entire workflow into a CI/CD pipeline using GitLab CI. When a data scientist committed new code, it would automatically trigger the pipeline to run data validation tests, retrain the model, and if performance metrics were met, version the new model in our registry for deployment."
-Result
-The results here are about platform efficiency and capability, not just a single model's accuracy.
-•	Metrics: "The implementation of this MLOps framework had a transformative effect on the team."
-o	"Deployment Time: We reduced the average model deployment time from 3 weeks to under 2 days."
-o	"Developer Velocity: We eliminated redundant work, allowing our data scientists to focus on modeling instead of infrastructure. This led to a 50% increase in the number of ML projects we could deliver per quarter."
-o	"Reliability: Automated data quality checks reduced data-related production errors by over 80%."
-•	Business Value: "This platform became the standard for all ML development at the company, creating a scalable and reliable 'model factory' that allowed us to respond much faster to new business needs."
- 
-## 2. Connect to Amazon's Leadership Principles (LPs)
-•	Ownership: This is the ultimate ownership story. You saw a systemic problem that was slowing everyone down and took full responsibility for designing and building the solution.
-•	Think Big: You didn't just solve a problem for one project. You built a platform that scaled across the entire organization and fundamentally changed how the team operated.
-•	Invent and Simplify: You took a complex, chaotic, manual set of processes and created a single, simple, automated pipeline.
-•	Dive Deep: Your detailed explanation of the pipeline's components (Airflow, Great Expectations, SageMaker, Docker) proves your deep technical and architectural understanding.
-•	Deliver Results: The metrics on reduced deployment time, increased team velocity, and fewer production errors are powerful evidence of the results you delivered.
- 
-## 3. Prepare for Likely Follow-up Questions
-Be ready for questions about your architectural trade-offs and design choices.
-•	"Why did you choose Apache Airflow over another orchestrator like Kubeflow Pipelines?"
-•	"You mentioned a feature store. What are the main benefits and challenges of implementing one?"
-•	"How did you manage model and data versioning within your pipeline?" (Hint: Talk about tools like DVC or MLflow).
-•	"Walk me through how a data scientist would interact with your pipeline. How much of it was automated versus self-service?"
-•	"What was the most challenging part of building this platform? Was it technical, or was it getting buy-in from the team to adopt the new process?"
-
-Describe the state of experimentation before your pipeline.
-•	Problem: Our product and marketing teams wanted to run A/B tests to validate new features and ideas, but the process was entirely manual and required significant data engineering support for every single experiment.
-•	Pain Point: Setting up an experiment, ensuring the data was collected correctly, and then performing the statistical analysis was a huge bottleneck. It involved multiple handoffs between product managers, developers, and data analysts.
-•	Business Impact: This friction meant we were running very few experiments (maybe one or two a month). We were making decisions based on intuition rather than data, and our product innovation cycle was slow as a result.
-Task
-What was your specific goal to resolve this?
-•	"My objective was to design and build a fully automated, end-to-end A/B testing pipeline."
-•	"The goal was to create a self-service platform that would empower our product managers to independently set up, launch, monitor, and analyze experiments without needing to write code or file a ticket with the data team for every step."
-Action
-This is where you Dive Deep on the technical implementation. Break it down by the stages you mentioned.
-•	1. Streamlined Experiment Setup: "First, I developed a simple configuration system (or UI) where a product manager could define an experiment. They could specify the hypothesis, the primary and secondary success metrics (e.g., click-through rate, conversion), the user allocation (e.g., 50/50 split), and the target audience segment. This config file was the single source of truth for the experiment."
-•	2. Automated Data Collection: "Next, I worked with the front-end engineers to integrate a standardized event-tracking SDK. Our user assignment service would read the experiment config and assign users to either the control or treatment group, logging an 'ExperimentViewed' event. This event, along with all subsequent user actions, was streamed through Segment (or Kafka) into our Snowflake (or Redshift/BigQuery) data warehouse. This ensured clean, consistent data collection for all experiments."
-•	3. Automated Analysis & Reporting: "I built a daily pipeline using dbt and Airflow that would process the raw event data and aggregate it for each experiment. It then ran the statistical analysis using a Python script with the statsmodels library to calculate lift, p-values, and confidence intervals. The results were automatically pushed to a Tableau dashboard. The dashboard provided a clear, at-a-glance view for product managers to see if their results were statistically significant."
-Result
-Focus on the impact your platform had on the company's culture and velocity.
-•	Metrics: "The new pipeline fundamentally changed how we operated."
-o	"Experiment Velocity: We went from running 1-2 experiments per month to over 15 experiments per month."
-o	"Time to Launch: The time required to launch a new experiment was reduced from over a week to less than an hour."
-o	"Data-Driven Wins: In the first quarter after launch, the platform enabled us to identify three 'winning' features that, once rolled out, led to a measurable 2% increase in overall user conversion."
-•	Business Value: "The pipeline democratized experimentation and fostered a data-driven culture. Product managers could now quickly and cheaply test their ideas, leading to faster innovation and better product decisions."
- 
-## 2. Connect to Amazon's Leadership Principles (LPs)
-•	Customer Obsession: Your "customers" were the product managers. You were obsessed with removing their pain points and empowering them to do their jobs more effectively.
-•	Invent and Simplify: You took a complex, multi-step, manual process and created a single, simple, automated system.
-•	Ownership: You saw a major bottleneck that was hindering the entire product development lifecycle and took ownership of building the end-to-end solution.
-•	Deliver Results: The metrics are clear: you increased experiment velocity by over 10x and delivered features that directly improved a core business KPI.
- 
-## 3. Prepare for Likely Follow-up Questions
-Be ready for questions on the statistical and product side of A/B testing.
-•	"How did you determine the necessary sample size and duration for an experiment?" (Hint: Talk about statistical power analysis).
-•	"What is a p-value? How did you explain the concept of 'statistical significance' to non-technical product managers?"
-•	"How did you handle the 'peeking problem'—stakeholders wanting to end a test early as soon as it looks positive?" (Hint: Talk about setting fixed durations or using sequential testing methods).
-•	"Did you account for the multiple comparisons problem when running many experiments at once?" (Hint: Talk about methods like Bonferroni correction or FDR control).
-•	"What was the most common mistake product managers made when using your platform, and how did you help them?"
-
-Situation
-Describe the initial problem. What was the pain point for the content or curation team?
-•	Problem: Our platform hosted thousands of online course videos, and each one needed to be manually tagged with relevant metadata (e.g., "Python," "Data Structures," "Machine Learning") by a content curation team.
-•	Pain Point: This manual tagging process was incredibly slow and inconsistent. Different curators might use different tags for the same topic, and new content would sit in a backlog waiting to be tagged.
-•	Business Impact: The inconsistent and delayed tagging led to a poor search experience for our users. They struggled to find relevant courses, which negatively impacted user engagement and content discoverability.
-Task
-What was your specific objective to solve this?
-•	"My task was to design and build an automated NLP solution to predict and suggest metadata tags for new video courses based on their transcribed content."
-•	"The key goals were to reduce the manual tagging time for the curation team and, most importantly, to improve the consistency and accuracy of our metadata to enhance the search and recommendation engine for our end-users."
-Action
-This is where you Dive Deep on your AWS architecture and NLP methodology.
-•	1. Data Pipeline & Preprocessing: "The foundation of the project was the data pipeline. I used AWS Glue to create an ETL job that pulled raw video transcripts (the text data) from an S3 bucket. This job performed critical NLP preprocessing steps like text cleaning, tokenization, stop-word removal, and lemmatization. The processed text and its corresponding labels were then converted into feature vectors—initially using TF-IDF, and later BERT embeddings—and stored in a separate S3 bucket, ready for model training."
-•	2. Model Development in SageMaker: "I framed the problem as a multi-label classification task, as a single course could have multiple relevant tags. I developed the model in an AWS SageMaker notebook instance using Python. I benchmarked several models, starting with a baseline of Logistic Regression and eventually choosing a fine-tuned DistilBERT model for its strong performance in capturing semantic meaning without the full computational cost of larger models."
-•	3. Training & Deployment: "I used a SageMaker Training Job to train the final model on the featurized data from S3. Once trained, I deployed the model as a real-time inference endpoint using SageMaker Hosting. This created a REST API that the content management system could call. When a new video was uploaded and transcribed, the system would send the text to my endpoint and get a list of predicted tags with confidence scores back in milliseconds."
-Result
-Connect your technical solution to the business outcomes.
-•	Metrics: "The solution had a significant operational and user-facing impact."
-o	"Efficiency: It reduced the average time spent on tagging new content by 30%. The curators' role shifted from manual tagging to simply reviewing and approving the model's high-confidence suggestions."
-o	"Discoverability: We measured the impact on search by tracking 'search success rate'—the percentage of searches that resulted in a user clicking on a course. After the new tags were implemented, this metric improved by 15%."
-•	Business Value: "This project not only saved hundreds of hours for our content team but also directly improved the user experience. By providing more relevant and consistent tags, we made our content library more accessible and valuable, which is a key driver of user retention."
- 
-## 2. Connect to Amazon's Leadership Principles (LPs)
-•	Invent and Simplify: You took a complex, manual, and subjective process (tagging) and replaced it with a simple, automated, and data-driven solution.
-•	Dive Deep: Your detailed explanation of the AWS stack (Glue, S3, SageMaker) and the NLP techniques (TF-IDF vs. BERT, multi-label classification) is a perfect demonstration of this principle.
-•	Customer Obsession: You were obsessed with two customers: the internal curation team (whose workflow you improved) and the end-users (whose search experience you enhanced).
-•	Deliver Results: You have clear, quantifiable results: 30% time reduction and a 15% improvement in search success rate.
- 
-## 3. Prepare for Likely Follow-up Questions
-Be ready for questions about your specific choices and challenges.
-•	"Why did you choose AWS Glue for ETL instead of a different tool?"
-•	"Walk me through the trade-offs between using a TF-IDF model versus a Transformer-based model like BERT for this problem."
-•	"How did you evaluate the performance of a multi-label classification model? What metrics did you use?" (Hint: Talk about hamming loss, F1-score per label, etc.).
-•	"How did you handle tags that didn't have many examples in the training data (the long-tail problem)?"
-•	"The curators still had to review the tags. How did you set the confidence threshold for when a tag should be automatically applied versus when it should be sent for human review?"
-
-I’m excited about Amazon because it combines two things I’m deeply passionate about — building scalable AI solutions and helping customers realize measurable business impact.
-In my recent roles, I’ve led multiple GenAI initiatives that align closely with AWS’s mission of helping customers accelerate innovation. For example, I developed an LLM-powered chatbot for traders by integrating Bloomberg and Refinitiv market data feeds using LangChain and OpenAI APIs. This allowed trading teams to query live CDS index levels, spreads, and historical time series through natural language, improving decision speed and accuracy.
-I also led the development of an AI chatbot for educational platforms using open-source LLMs and LangChain, capable of understanding and retrieving information across diverse document types like PDFs, OCR text, HTML, and PowerPoint files — significantly reducing search time and improving accessibility for students.
-These experiences taught me how to design and deploy scalable, low-latency GenAI systems on AWS using SageMaker, Glue, Lambda, and Step Functions. What draws me to AWS Professional Services is the opportunity to apply that experience in a customer-facing capacity — helping organizations architect secure, cost-efficient AI solutions that truly deliver results.
-I strongly identify with Amazon’s principles of Customer Obsession, Invent and Simplify, and Deliver Results. They perfectly match how I approach my work: starting from the customer’s pain point, diving deep into the data, and delivering measurable, scalable outcomes.”
-
+	•	Improved mapping coverage substantially while maintaining very high precision in the auto-link tier.
+	•	Reduced manual reconciliation load by routing only ambiguous cases to stewards.
+	•	Stabilized downstream pricing and risk jobs by ensuring market data joined reliably to internal positions, improving operational resilience and reporting quality.
